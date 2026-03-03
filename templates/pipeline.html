@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Pipeline{% endblock %}
+{% block content %}
+
+<h5 class="mb-3">Pipeline</h5>
+
+<div class="row g-3">
+  {% for st in stages %}
+  <div class="col-lg-3 col-md-6">
+    <div class="card h-100">
+      <div class="card-header fw-semibold">{{ st }}</div>
+      <div class="card-body">
+        {% for l in data[st] %}
+          <div class="border rounded p-2 mb-2 bg-white">
+            <div class="fw-semibold">{{ l.name }}</div>
+            <div class="small text-muted">{{ l.phone }} | Score: {{ l.lead_score }}</div>
+            <div class="d-flex gap-1 mt-2 flex-wrap">
+              <a class="btn btn-sm btn-outline-primary" href="{{ url_for('lead_detail', lead_id=l.id) }}">Open</a>
+              <form method="post" action="{{ url_for('lead_set_stage', lead_id=l.id) }}">
+                <input type="hidden" name="stage" value="Follow-up">
+                <button class="btn btn-sm btn-outline-secondary" type="submit">→ Follow-up</button>
+              </form>
+            </div>
+          </div>
+        {% endfor %}
+        {% if not data[st] %}
+          <div class="text-muted small">No leads</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+{% endblock %}

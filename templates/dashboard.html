@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+
+<div class="row g-3 mb-3">
+  <div class="col-md-3">
+    <div class="card p-3">
+      <div class="text-muted small">New leads today</div>
+      <div class="fs-3 fw-bold">{{ new_leads_today }}</div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card p-3">
+      <div class="text-muted small">Follow-ups due</div>
+      <div class="fs-3 fw-bold">{{ followups_due_count }}</div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card p-3">
+      <div class="text-muted small">Active leads</div>
+      <div class="fs-3 fw-bold">{{ total_active }}</div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card p-3">
+      <div class="text-muted small">Converted this month</div>
+      <div class="fs-3 fw-bold">{{ converted_this_month }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header fw-semibold">Follow-ups (Top 10)</div>
+      <div class="card-body">
+        {% if followups_due %}
+          <div class="table-responsive">
+            <table class="table table-sm">
+              <thead><tr><th>Name</th><th>Phone</th><th>Next</th><th></th></tr></thead>
+              <tbody>
+                {% for l in followups_due %}
+                <tr>
+                  <td>{{ l.name }}</td>
+                  <td>{{ l.phone }}</td>
+                  <td>{{ l.next_followup_date }}</td>
+                  <td><a class="btn btn-sm btn-outline-primary" href="{{ url_for('lead_detail', lead_id=l.id) }}">Open</a></td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="text-muted">No follow-ups due today 🎉</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header fw-semibold">Hot Leads (Score 60+)</div>
+      <div class="card-body">
+        {% if hot_leads %}
+          <div class="table-responsive">
+            <table class="table table-sm">
+              <thead><tr><th>Name</th><th>Score</th><th>Stage</th><th></th></tr></thead>
+              <tbody>
+                {% for l in hot_leads %}
+                <tr>
+                  <td>{{ l.name }}</td>
+                  <td><span class="badge bg-danger">{{ l.lead_score }}</span></td>
+                  <td>{{ l.stage }}</td>
+                  <td><a class="btn btn-sm btn-outline-primary" href="{{ url_for('lead_detail', lead_id=l.id) }}">Open</a></td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="text-muted">No hot leads right now.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+{% block title %}Leads - GlobalIT CRM{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2 class="mb-0">Leads</h2>
+  <a class="btn btn-sm btn-primary" href="{{ url_for('lead_create') }}">New Lead</a>
+</div>
+
+<form method="get" class="row g-2 mb-3">
+  <div class="col-md-4">
+    <input type="text" name="q" value="{{ q }}" class="form-control" placeholder="Search name/phone">
+  </div>
+  <div class="col-md-3">
+    <select name="stage" class="form-select">
+      <option value="">All stages</option>
+      {% for s in stages %}
+        <option value="{{ s }}" {% if stage==s %}selected{% endif %}>{{ s }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-md-3">
+    <select name="source" class="form-select">
+      <option value="">All sources</option>
+      {% for s in sources %}
+        <option value="{{ s }}" {% if source==s %}selected{% endif %}>{{ s }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-md-2">
+    <button class="btn btn-secondary w-100">Filter</button>
+  </div>
+</form>
+
+{% if leads %}
+  <div class="table-responsive">
+    <table class="table table-sm">
+      <thead><tr><th>Name</th><th>Phone</th><th>Stage</th><th>Score</th><th></th></tr></thead>
+      <tbody>
+        {% for l in leads %}
+        <tr>
+          <td>{{ l.name }}</td>
+          <td>{{ l.phone }}</td>
+          <td>{{ l.stage }}</td>
+          <td><span class="badge {% if l.lead_score>=60 %}bg-danger{% else %}bg-secondary{% endif %}">{{ l.lead_score }}</span></td>
+          <td><a class="btn btn-sm btn-outline-primary" href="{{ url_for('lead_detail', lead_id=l.id) }}">Open</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% else %}
+  <div class="text-muted">No leads found.</div>
+{% endif %}
+{% endblock %}

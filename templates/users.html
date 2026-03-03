@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Users{% endblock %}
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h5 class="mb-0">Users</h5>
+</div>
+
+<div class="card p-3 mb-3">
+  <div class="fw-semibold mb-2">Create User</div>
+  <form class="row g-2" method="post" action="{{ url_for('users_create') }}">
+    <div class="col-md-3">
+      <input class="form-control" name="username" placeholder="username" required>
+    </div>
+    <div class="col-md-3">
+      <input class="form-control" name="full_name" placeholder="Full name">
+    </div>
+    <div class="col-md-2">
+      <select class="form-select" name="role">
+        <option value="counselor">counselor</option>
+        <option value="admin">admin</option>
+      </select>
+    </div>
+    <div class="col-md-3">
+      <input class="form-control" name="password" placeholder="password" required>
+    </div>
+    <div class="col-md-1 d-grid">
+      <button class="btn btn-primary">Add</button>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Username</th>
+          <th>Full Name</th>
+          <th>Role</th>
+          <th>Status</th>
+          <th>Created</th>
+          <th class="text-end">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in users %}
+        <tr>
+          <td>{{ u.username }}</td>
+          <td>{{ u.full_name or '' }}</td>
+          <td><span class="badge bg-secondary">{{ u.role }}</span></td>
+          <td>
+            {% if u.is_active %}
+              <span class="badge bg-success">Active</span>
+            {% else %}
+              <span class="badge bg-danger">Disabled</span>
+            {% endif %}
+          </td>
+          <td>{{ u.created_at|ist }}</td>
+          <td class="text-end">
+            <form class="d-inline" method="post" action="{{ url_for('users_toggle', user_id=u.id) }}">
+              <button class="btn btn-sm btn-outline-warning" type="submit">Toggle</button>
+            </form>
+            <form class="d-inline" method="post" action="{{ url_for('users_reset_password', user_id=u.id) }}">
+              <input type="hidden" name="new_password" value="password123">
+              <button class="btn btn-sm btn-outline-secondary" type="submit">Reset→password123</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+        {% if not users %}
+        <tr><td colspan="6" class="text-center text-muted py-4">No users.</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}

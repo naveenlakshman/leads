@@ -1,0 +1,28 @@
+.sidebar{
+  width: 240px;
+  min-height: 100vh;
+  background: #ffffff;
+  border-right: 1px solid #e9ecef;
+}
+
+.sidebar .nav-link{
+  color: #333;
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.sidebar .nav-link:hover{
+  background: #f2f4f7;
+}
+
+.sidebar .nav-link.active{
+  background: #e7f1ff;
+  color: #0b5ed7;
+  font-weight: 600;
+}
+
+.topbar{
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}

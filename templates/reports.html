@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Reports{% endblock %}
+{% block content %}
+
+<h5 class="mb-3">Reports</h5>
+
+<div class="row g-3 mb-3">
+  <div class="col-md-3"><div class="card p-3"><div class="text-muted small">Total leads</div><div class="fs-3 fw-bold">{{ total_leads }}</div></div></div>
+  <div class="col-md-3"><div class="card p-3"><div class="text-muted small">Active</div><div class="fs-3 fw-bold">{{ active }}</div></div></div>
+  <div class="col-md-3"><div class="card p-3"><div class="text-muted small">Converted</div><div class="fs-3 fw-bold">{{ converted }}</div></div></div>
+  <div class="col-md-3"><div class="card p-3"><div class="text-muted small">Lost</div><div class="fs-3 fw-bold">{{ lost }}</div></div></div>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header fw-semibold">Lead Sources</div>
+      <div class="card-body">
+        <table class="table table-sm">
+          <thead><tr><th>Source</th><th>Count</th></tr></thead>
+          <tbody>
+            {% for s, c in source_rows %}
+              <tr><td>{{ s or 'Unknown' }}</td><td>{{ c }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header fw-semibold">Course Interest (Raw)</div>
+      <div class="card-body">
+        <table class="table table-sm">
+          <thead><tr><th>Interested Courses</th><th>Count</th></tr></thead>
+          <tbody>
+            {% for s, c in course_rows %}
+              <tr><td>{{ s or 'Unknown' }}</td><td>{{ c }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <div class="small text-muted mt-2">Note: This is v1 (text). Later we can make multi-select + analytics.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
