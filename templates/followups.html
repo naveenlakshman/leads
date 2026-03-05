@@ -6,6 +6,19 @@
   <h5 class="mb-0">Follow-ups Due ({{ today }})</h5>
 </div>
 
+{% if is_admin %}
+<form method="get" class="row g-2 mb-3">
+  <div class="col-md-4">
+    <select name="user_id" class="form-select" onchange="this.form.submit()">
+      <option value="">All Counselors</option>
+      {% for user in all_users %}
+        <option value="{{ user.id }}" {% if selected_user_id == user.id|string %}selected{% endif %}>{{ user.full_name or user.username }}</option>
+      {% endfor %}
+    </select>
+  </div>
+</form>
+{% endif %}
+
 <div class="card">
   <div class="table-responsive">
     <table class="table table-hover mb-0">
@@ -13,6 +26,7 @@
         <tr>
           <th>Name</th>
           <th>Phone</th>
+          {% if is_admin %}<th>Owner</th>{% endif %}
           <th>Stage</th>
           <th>Next Follow-up</th>
           <th></th>
@@ -23,6 +37,7 @@
         <tr>
           <td>{{ l.name }}</td>
           <td>{{ l.phone }}</td>
+          {% if is_admin %}<td><small>{{ l.assigned_to.full_name or l.assigned_to.username if l.assigned_to else 'Unassigned' }}</small></td>{% endif %}
           <td>{{ l.stage }}</td>
           <td>{{ l.next_followup_date }}</td>
           <td class="text-end">
@@ -31,7 +46,7 @@
         </tr>
         {% endfor %}
         {% if not leads %}
-        <tr><td colspan="5" class="text-center text-muted py-4">No follow-ups due 🎉</td></tr>
+        <tr><td {% if is_admin %}colspan="6"{% else %}colspan="5"{% endif %} class="text-center text-muted py-4">No follow-ups due 🎉</td></tr>
         {% endif %}
       </tbody>
     </table>

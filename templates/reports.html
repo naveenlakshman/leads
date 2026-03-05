@@ -2,7 +2,13 @@
 {% block title %}Reports{% endblock %}
 {% block content %}
 
-<h5 class="mb-3">Reports</h5>
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h5 class="mb-0">Reports</h5>
+  <div class="d-flex gap-2">
+    <a class="btn btn-sm {% if show_all %}btn-primary{% else %}btn-outline-primary{% endif %}" href="{{ url_for('reports', show_all=1) }}">Show All</a>
+    <a class="btn btn-sm {% if not show_all %}btn-primary{% else %}btn-outline-primary{% endif %}" href="{{ url_for('reports') }}">My Leads</a>
+  </div>
+</div>
 
 <div class="row g-3 mb-3">
   <div class="col-md-3"><div class="card p-3"><div class="text-muted small">Total leads</div><div class="fs-3 fw-bold">{{ total_leads }}</div></div></div>

@@ -14,10 +14,10 @@ def create_app():
 
     # predefined dropdown options used across lead forms
     GENDER_OPTIONS = ["Male", "Female", "Other"]
-    EDUCATION_OPTIONS = ["PUC", "Degree", "Working", "Job seeker"]
+    EDUCATION_OPTIONS = ["Below 10th", "SSLC", "PUC", "Degree", "Working", "Job seeker"]
     STREAM_OPTIONS = ["Commerce", "Science", "Arts"]
     CAREER_GOAL_OPTIONS = ["Job", "Internship", "Skills", "Business"]
-    LEAD_SOURCE_OPTIONS = ["Walk-in", "Instagram", "Referral", "Other"]
+    LEAD_SOURCE_OPTIONS = ["Walk-in", "Instagram", "Referral","Google Call","Poster" , "Other",]
     TIMEFRAME_OPTIONS = ["Immediately", "1 week", "1 month", "Exploring"]
 
     FOLLOWUP_METHODS = ["Call", "WhatsApp", "Email", "In-person", "Other"]
@@ -98,23 +98,35 @@ def create_app():
     def dashboard():
         today = date.today()
 
-        new_leads_today = Lead.query.filter(db.func.date(Lead.created_at) == str(today)).count()
+        # Counselors see only their leads; admins see all by default
+        query_filter = (Lead.assigned_to_id == current_user.id) if current_user.role == "counselor" else True
+
+        new_leads_today = Lead.query.filter(
+            db.func.date(Lead.created_at) == str(today),
+            query_filter
+        ).count()
 
         followups_due = Lead.query.filter(
             Lead.status == "active",
             Lead.next_followup_date.isnot(None),
-            Lead.next_followup_date <= today
+            Lead.next_followup_date <= today,
+            query_filter
         ).order_by(Lead.next_followup_date.asc()).all()
 
-        hot_leads = Lead.query.filter(Lead.status == "active", Lead.lead_score >= 60).order_by(Lead.lead_score.desc()).limit(10).all()
+        hot_leads = Lead.query.filter(
+            Lead.status == "active",
+            Lead.lead_score >= 60,
+            query_filter
+        ).order_by(Lead.lead_score.desc()).limit(10).all()
 
         converted_this_month = Lead.query.filter(
             Lead.status == "converted",
             db.extract("month", Lead.updated_at) == today.month,
-            db.extract("year", Lead.updated_at) == today.year
+            db.extract("year", Lead.updated_at) == today.year,
+            query_filter
         ).count()
 
-        total_active = Lead.query.filter(Lead.status == "active").count()
+        total_active = Lead.query.filter(Lead.status == "active", query_filter).count()
 
         return render_template(
             "dashboard.html",
@@ -135,8 +147,16 @@ def create_app():
         q = request.args.get("q", "").strip()
         stage = request.args.get("stage", "").strip()
         source = request.args.get("source", "").strip()
+        show_all = request.args.get("show_all", "").strip() == "1"
 
         query = Lead.query
+
+        # Counselors see only their leads; admins can optionally see all
+        if current_user.role == "counselor":
+            query = query.filter(Lead.assigned_to_id == current_user.id)
+        elif not show_all:
+            # Admin viewing their own leads by default
+            query = query.filter(Lead.assigned_to_id == current_user.id)
 
         if q:
             like = f"%{q}%"
@@ -158,7 +178,7 @@ def create_app():
         stages = ["New Lead", "Contacted", "Interested", "Counseling Done", "Follow-up", "Converted", "Lost"]
         sources = [x[0] for x in db.session.query(Lead.lead_source).distinct().filter(Lead.lead_source.isnot(None)).all()]
 
-        return render_template("leads.html", leads=leads, q=q, stage=stage, source=source, stages=stages, sources=sources)
+        return render_template("leads.html", leads=leads, q=q, stage=stage, source=source, stages=stages, sources=sources, show_all=show_all, is_admin=(current_user.role == "admin"))
 
     @app.route("/leads/new", methods=["GET", "POST"])
     @login_required
@@ -224,9 +244,11 @@ def create_app():
     @login_required
     def lead_detail(lead_id):
         lead = Lead.query.get_or_404(lead_id)
+        all_users = User.query.filter(User.is_active == True).order_by(User.full_name).all()
         return render_template(
             "lead_detail.html",
             lead=lead,
+            all_users=all_users,
             methods=FOLLOWUP_METHODS,
             outcomes=FOLLOWUP_OUTCOMES,
         )
@@ -318,6 +340,27 @@ def create_app():
         flash("Lead marked as Lost.", "warning")
         return redirect(url_for("lead_detail", lead_id=lead.id))
 
+    @app.route("/leads/<int:lead_id>/reassign", methods=["POST"])
+    @login_required
+    def lead_reassign(lead_id):
+        lead = Lead.query.get_or_404(lead_id)
+        assigned_to_id = request.form.get("assigned_to_id", "").strip() or None
+        
+        if assigned_to_id:
+            # Verify user exists and is active
+            user = User.query.get(int(assigned_to_id))
+            if not user or not user.is_active:
+                flash("Invalid user selected.", "danger")
+                return redirect(url_for("lead_detail", lead_id=lead.id))
+            lead.assigned_to_id = int(assigned_to_id)
+            flash(f"Lead reassigned to {user.full_name or user.username}.", "success")
+        else:
+            lead.assigned_to_id = None
+            flash("Lead unassigned.", "info")
+        
+        db.session.commit()
+        return redirect(url_for("lead_detail", lead_id=lead.id))
+
     # -----------------------
     # FOLLOWUPS (today list)
     # -----------------------
@@ -325,13 +368,29 @@ def create_app():
     @login_required
     def followups_today():
         today = date.today()
+        
+        # Counselors see only their leads; admins can filter by user
+        user_filter = request.args.get("user_id", "").strip()
+        query_filter = (Lead.assigned_to_id == current_user.id) if current_user.role == "counselor" else True
+        
+        # If admin selected a specific user, filter by that
+        if current_user.role == "admin" and user_filter:
+            try:
+                query_filter = Lead.assigned_to_id == int(user_filter)
+            except (ValueError, TypeError):
+                pass
+        
         leads = Lead.query.filter(
             Lead.status == "active",
             Lead.next_followup_date.isnot(None),
-            Lead.next_followup_date <= today
+            Lead.next_followup_date <= today,
+            query_filter
         ).order_by(Lead.next_followup_date.asc()).all()
 
-        return render_template("followups.html", leads=leads, today=today)
+        # Get all active users for admin dropdown
+        all_users = User.query.filter(User.is_active == True).order_by(User.full_name).all() if current_user.role == "admin" else []
+
+        return render_template("followups.html", leads=leads, today=today, all_users=all_users, selected_user_id=user_filter, is_admin=(current_user.role == "admin"))
 
     # Add followup note to a lead
     @app.route("/leads/<int:lead_id>/followups/new", methods=["POST"])
@@ -369,14 +428,40 @@ def create_app():
     # -----------------------
     # PIPELINE
     # -----------------------
+    def get_next_stages(current_stage):
+        """Return dict of next stage(s) available from current stage."""
+        stage_flow = {
+            "New Lead": [{"name": "Contacted", "color": "primary"}],
+            "Contacted": [{"name": "Interested", "color": "info"}],
+            "Interested": [{"name": "Counseling Done", "color": "warning"}],
+            "Counseling Done": [{"name": "Follow-up", "color": "secondary"}],
+            "Follow-up": [
+                {"name": "Converted", "color": "success"},
+                {"name": "Lost", "color": "danger"}
+            ],
+            "Converted": [],  # terminal
+            "Lost": []        # terminal
+        }
+        return stage_flow.get(current_stage, [])
+
     @app.route("/pipeline")
     @login_required
     def pipeline():
+        show_all = request.args.get("show_all", "").strip() == "1"
         stages = ["New Lead", "Contacted", "Interested", "Counseling Done", "Follow-up", "Converted", "Lost"]
+        
+        # Counselors see only their leads; admins can optionally see all
+        base_query = Lead.query
+        if current_user.role == "counselor":
+            base_query = base_query.filter(Lead.assigned_to_id == current_user.id)
+        elif not show_all:
+            # Admin viewing their own leads by default
+            base_query = base_query.filter(Lead.assigned_to_id == current_user.id)
+        
         data = {}
         for st in stages:
-            data[st] = Lead.query.filter(Lead.stage == st).order_by(Lead.updated_at.desc()).limit(50).all()
-        return render_template("pipeline.html", stages=stages, data=data)
+            data[st] = base_query.filter(Lead.stage == st).order_by(Lead.updated_at.desc()).limit(50).all()
+        return render_template("pipeline.html", stages=stages, data=data, get_next_stages=get_next_stages, show_all=show_all, is_admin=(current_user.role == "admin"))
 
     # quick stage update (buttons)
     @app.route("/leads/<int:lead_id>/stage", methods=["POST"])
@@ -406,23 +491,28 @@ def create_app():
     @login_required
     @admin_required
     def reports():
+        show_all = request.args.get("show_all", "").strip() == "1"
         today = date.today()
-        total_leads = Lead.query.count()
-        active = Lead.query.filter(Lead.status == "active").count()
-        converted = Lead.query.filter(Lead.status == "converted").count()
-        lost = Lead.query.filter(Lead.status == "lost").count()
+
+        # Admin can toggle between their leads and all leads
+        base_filter = (Lead.assigned_to_id == current_user.id) if not show_all else True
+
+        total_leads = Lead.query.filter(base_filter).count()
+        active = Lead.query.filter(Lead.status == "active", base_filter).count()
+        converted = Lead.query.filter(Lead.status == "converted", base_filter).count()
+        lost = Lead.query.filter(Lead.status == "lost", base_filter).count()
 
         # source performance
         source_rows = db.session.query(
             Lead.lead_source,
             db.func.count(Lead.id)
-        ).group_by(Lead.lead_source).all()
+        ).filter(base_filter).group_by(Lead.lead_source).all()
 
         # course interest (simple text contains)
         course_rows = db.session.query(
             Lead.interested_courses,
             db.func.count(Lead.id)
-        ).group_by(Lead.interested_courses).all()
+        ).filter(base_filter).group_by(Lead.interested_courses).all()
 
         return render_template(
             "reports.html",
@@ -431,7 +521,8 @@ def create_app():
             converted=converted,
             lost=lost,
             source_rows=source_rows,
-            course_rows=course_rows
+            course_rows=course_rows,
+            show_all=show_all
         )
 
     # -----------------------

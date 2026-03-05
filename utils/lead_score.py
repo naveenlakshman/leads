@@ -1,6 +1,7 @@
 # utils/lead_score.py
+from typing import Optional
 
-def compute_lead_score(lead_source: str | None, start_timeframe: str | None, education_status: str | None, career_goal: str | None) -> int:
+def compute_lead_score(lead_source: Optional[str], start_timeframe: Optional[str], education_status: Optional[str], career_goal: Optional[str]) -> int:
     score = 0
 
     src = (lead_source or "").strip().lower()

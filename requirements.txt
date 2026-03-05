@@ -4,3 +4,4 @@ Flask-SQLAlchemy
 Werkzeug
 tzdata
 gunicorn
+backports.zoneinfo

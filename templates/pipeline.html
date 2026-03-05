@@ -2,7 +2,15 @@
 {% block title %}Pipeline{% endblock %}
 {% block content %}
 
-<h5 class="mb-3">Pipeline</h5>
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h5 class="mb-0">Pipeline</h5>
+  {% if is_admin %}
+    <div class="d-flex gap-2">
+      <a class="btn btn-sm {% if show_all %}btn-primary{% else %}btn-outline-primary{% endif %}" href="{{ url_for('pipeline', show_all=1) }}">Show All</a>
+      <a class="btn btn-sm {% if not show_all %}btn-primary{% else %}btn-outline-primary{% endif %}" href="{{ url_for('pipeline') }}">My Leads</a>
+    </div>
+  {% endif %}
+</div>
 
 <div class="row g-3">
   {% for st in stages %}
@@ -14,12 +22,29 @@
           <div class="border rounded p-2 mb-2 bg-white">
             <div class="fw-semibold">{{ l.name }}</div>
             <div class="small text-muted">{{ l.phone }} | Score: {{ l.lead_score }}</div>
+            {% if l.assigned_to %}<div class="small text-info">👤 {{ l.assigned_to.full_name or l.assigned_to.username }}</div>{% endif %}
             <div class="d-flex gap-1 mt-2 flex-wrap">
               <a class="btn btn-sm btn-outline-primary" href="{{ url_for('lead_detail', lead_id=l.id) }}">Open</a>
-              <form method="post" action="{{ url_for('lead_set_stage', lead_id=l.id) }}">
-                <input type="hidden" name="stage" value="Follow-up">
-                <button class="btn btn-sm btn-outline-secondary" type="submit">→ Follow-up</button>
-              </form>
+              {% set next_stages = get_next_stages(l.stage) %}
+              {% if next_stages|length == 1 %}
+                <!-- Single next stage -->
+                <form method="post" action="{{ url_for('lead_set_stage', lead_id=l.id) }}" class="d-inline">
+                  <input type="hidden" name="stage" value="{{ next_stages[0].name }}">
+                  <button class="btn btn-sm btn-outline-{{ next_stages[0].color }}" type="submit">
+                    → {{ next_stages[0].name }}
+                  </button>
+                </form>
+              {% elif next_stages|length > 1 %}
+                <!-- Multiple next stages (fork options) -->
+                {% for ns in next_stages %}
+                  <form method="post" action="{{ url_for('lead_set_stage', lead_id=l.id) }}" class="d-inline">
+                    <input type="hidden" name="stage" value="{{ ns.name }}">
+                    <button class="btn btn-sm btn-outline-{{ ns.color }}" type="submit">
+                      {{ ns.name }}
+                    </button>
+                  </form>
+                {% endfor %}
+              {% endif %}
             </div>
           </div>
         {% endfor %}

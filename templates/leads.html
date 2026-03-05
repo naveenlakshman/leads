@@ -3,7 +3,13 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
   <h2 class="mb-0">Leads</h2>
-  <a class="btn btn-sm btn-primary" href="{{ url_for('lead_create') }}">New Lead</a>
+  <div class="d-flex gap-2">
+    {% if is_admin %}
+      <a class="btn btn-sm {% if show_all %}btn-primary{% else %}btn-outline-primary{% endif %}" href="{{ url_for('leads_list', q=q, stage=stage, source=source, show_all=1) }}">Show All</a>
+      <a class="btn btn-sm {% if not show_all %}btn-primary{% else %}btn-outline-primary{% endif %}" href="{{ url_for('leads_list', q=q, stage=stage, source=source) }}">My Leads</a>
+    {% endif %}
+    <a class="btn btn-sm btn-primary" href="{{ url_for('lead_create') }}">New Lead</a>
+  </div>
 </div>
 
 <form method="get" class="row g-2 mb-3">
@@ -34,7 +40,7 @@
 {% if leads %}
   <div class="table-responsive">
     <table class="table table-sm">
-      <thead><tr><th>Name</th><th>Phone</th><th>Stage</th><th>Score</th><th></th></tr></thead>
+      <thead><tr><th>Name</th><th>Phone</th><th>Stage</th><th>Score</th><th>Owner</th><th></th></tr></thead>
       <tbody>
         {% for l in leads %}
         <tr>
@@ -42,6 +48,7 @@
           <td>{{ l.phone }}</td>
           <td>{{ l.stage }}</td>
           <td><span class="badge {% if l.lead_score>=60 %}bg-danger{% else %}bg-secondary{% endif %}">{{ l.lead_score }}</span></td>
+          <td><small class="text-muted">{% if l.assigned_to %}{{ l.assigned_to.full_name or l.assigned_to.username }}{% else %}Unassigned{% endif %}</small></td>
           <td><a class="btn btn-sm btn-outline-primary" href="{{ url_for('lead_detail', lead_id=l.id) }}">Open</a></td>
         </tr>
         {% endfor %}
