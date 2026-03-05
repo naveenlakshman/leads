@@ -10,23 +10,80 @@
   </div>
 </div>
 
+<!-- Overall KPIs -->
 <div class="row g-3 mb-3">
   <div class="col-md-3"><div class="card p-3"><div class="text-muted small">Total leads</div><div class="fs-3 fw-bold">{{ total_leads }}</div></div></div>
   <div class="col-md-3"><div class="card p-3"><div class="text-muted small">Active</div><div class="fs-3 fw-bold">{{ active }}</div></div></div>
   <div class="col-md-3"><div class="card p-3"><div class="text-muted small">Converted</div><div class="fs-3 fw-bold">{{ converted }}</div></div></div>
-  <div class="col-md-3"><div class="card p-3"><div class="text-muted small">Lost</div><div class="fs-3 fw-bold">{{ lost }}</div></div></div>
+  <div class="col-md-3"><div class="card p-3"><div class="text-muted small">Conversion Rate</div><div class="fs-3 fw-bold text-success">{{ conversion_rate }}%</div></div></div>
 </div>
 
+<!-- User Performance (Admin view) -->
+{% if show_all and user_stats %}
+<div class="card mb-3">
+  <div class="card-header fw-semibold">👥 User Performance</div>
+  <div class="card-body">
+    <div class="table-responsive">
+      <table class="table table-sm table-hover">
+        <thead class="table-light">
+          <tr>
+            <th>User</th>
+            <th class="text-center">Total</th>
+            <th class="text-center">Active</th>
+            <th class="text-center">Converted</th>
+            <th class="text-center">Lost</th>
+            <th class="text-center">Conv. Rate</th>
+            <th class="text-center">Last Contact</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for stat in user_stats %}
+          <tr>
+            <td><strong>{{ stat.user.full_name or stat.user.username }}</strong></td>
+            <td class="text-center">{{ stat.total }}</td>
+            <td class="text-center"><span class="badge bg-info">{{ stat.active }}</span></td>
+            <td class="text-center"><span class="badge bg-success">{{ stat.converted }}</span></td>
+            <td class="text-center"><span class="badge bg-danger">{{ stat.lost }}</span></td>
+            <td class="text-center">
+              <strong class="{% if stat.conversion_rate >= 30 %}text-success{% elif stat.conversion_rate >= 15 %}text-warning{% else %}text-danger{% endif %}">
+                {{ stat.conversion_rate }}%
+              </strong>
+            </td>
+            <td class="text-center text-muted small">
+              {% if stat.last_contact %}
+                {{ stat.last_contact.strftime('%d-%b-%Y') }}
+              {% else %}
+                <span class="text-secondary">—</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="small text-muted mt-2">
+      <strong>Color coding:</strong> Green: 30%+ conversion rate | Orange: 15-30% | Red: Below 15%
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Charts Row -->
 <div class="row g-3">
   <div class="col-lg-6">
     <div class="card">
-      <div class="card-header fw-semibold">Lead Sources</div>
+      <div class="card-header fw-semibold">📊 Lead Sources</div>
       <div class="card-body">
         <table class="table table-sm">
-          <thead><tr><th>Source</th><th>Count</th></tr></thead>
+          <thead><tr><th>Source</th><th class="text-end">Count</th><th class="text-end">%</th></tr></thead>
           <tbody>
             {% for s, c in source_rows %}
-              <tr><td>{{ s or 'Unknown' }}</td><td>{{ c }}</td></tr>
+              {% set pct = (c / total_leads * 100)|round(1) %}
+              <tr>
+                <td>{{ s or 'Unknown' }}</td>
+                <td class="text-end">{{ c }}</td>
+                <td class="text-end"><small class="text-muted">{{ pct }}%</small></td>
+              </tr>
             {% endfor %}
           </tbody>
         </table>
@@ -36,13 +93,18 @@
 
   <div class="col-lg-6">
     <div class="card">
-      <div class="card-header fw-semibold">Course Interest (Raw)</div>
+      <div class="card-header fw-semibold">🎓 Course Interest</div>
       <div class="card-body">
         <table class="table table-sm">
-          <thead><tr><th>Interested Courses</th><th>Count</th></tr></thead>
+          <thead><tr><th>Course</th><th class="text-end">Count</th><th class="text-end">%</th></tr></thead>
           <tbody>
             {% for s, c in course_rows %}
-              <tr><td>{{ s or 'Unknown' }}</td><td>{{ c }}</td></tr>
+              {% set pct = (c / total_leads * 100)|round(1) %}
+              <tr>
+                <td>{{ s or 'Unknown' }}</td>
+                <td class="text-end">{{ c }}</td>
+                <td class="text-end"><small class="text-muted">{{ pct }}%</small></td>
+              </tr>
             {% endfor %}
           </tbody>
         </table>

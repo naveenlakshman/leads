@@ -127,6 +127,48 @@ def create_app():
         ).count()
 
         total_active = Lead.query.filter(Lead.status == "active", query_filter).count()
+        
+        # Enhanced metrics
+        total_leads = Lead.query.filter(query_filter).count()
+        converted_total = Lead.query.filter(Lead.status == "converted", query_filter).count()
+        lost_total = Lead.query.filter(Lead.status == "lost", query_filter).count()
+        
+        # Conversion rate
+        conversion_rate = round((converted_total / total_leads * 100), 1) if total_leads > 0 else 0
+        
+        # Stage breakdown
+        stage_breakdown = db.session.query(
+            Lead.stage,
+            db.func.count(Lead.id)
+        ).filter(query_filter, Lead.status == "active").group_by(Lead.stage).all()
+        
+        # High-risk leads (old last contact)
+        high_risk_leads = Lead.query.filter(
+            Lead.status == "active",
+            query_filter
+        ).order_by(Lead.last_contact_date.desc()).limit(5).all()
+        
+        # For admins: team performance summary
+        team_stats = None
+        if current_user.role == "admin":
+            team_stats = []
+            counselors = User.query.filter(User.role == "counselor", User.is_active == True).all()
+            
+            for counselor in counselors:
+                c_total = Lead.query.filter(Lead.assigned_to_id == counselor.id).count()
+                c_converted = Lead.query.filter(Lead.assigned_to_id == counselor.id, Lead.status == "converted").count()
+                c_rate = round((c_converted / c_total * 100), 1) if c_total > 0 else 0
+                
+                if c_total > 0:
+                    team_stats.append({
+                        'name': counselor.full_name or counselor.username,
+                        'total': c_total,
+                        'converted': c_converted,
+                        'rate': c_rate
+                    })
+            
+            # Sort by conversion rate
+            team_stats.sort(key=lambda x: x['rate'], reverse=True)
 
         return render_template(
             "dashboard.html",
@@ -135,7 +177,16 @@ def create_app():
             followups_due_count=len(followups_due),
             hot_leads=hot_leads,
             converted_this_month=converted_this_month,
-            total_active=total_active
+            total_active=total_active,
+            total_leads=total_leads,
+            converted_total=converted_total,
+            lost_total=lost_total,
+            conversion_rate=conversion_rate,
+            stage_breakdown=stage_breakdown,
+            high_risk_leads=high_risk_leads,
+            team_stats=team_stats,
+            is_admin=current_user.role == "admin",
+            now=today
         )
 
     # -----------------------
@@ -502,6 +553,9 @@ def create_app():
         converted = Lead.query.filter(Lead.status == "converted", base_filter).count()
         lost = Lead.query.filter(Lead.status == "lost", base_filter).count()
 
+        # Overall conversion rate
+        conversion_rate = round((converted / total_leads * 100), 1) if total_leads > 0 else 0
+
         # source performance
         source_rows = db.session.query(
             Lead.lead_source,
@@ -514,15 +568,54 @@ def create_app():
             db.func.count(Lead.id)
         ).filter(base_filter).group_by(Lead.interested_courses).all()
 
+        # User Performance Metrics (only for show_all to see all users)
+        user_stats = []
+        if show_all:
+            users = User.query.filter(User.role == "counselor").all()
+            for user in users:
+                user_total = Lead.query.filter(Lead.assigned_to_id == user.id).count()
+                user_active = Lead.query.filter(Lead.assigned_to_id == user.id, Lead.status == "active").count()
+                user_converted = Lead.query.filter(Lead.assigned_to_id == user.id, Lead.status == "converted").count()
+                user_lost = Lead.query.filter(Lead.assigned_to_id == user.id, Lead.status == "lost").count()
+                user_conv_rate = round((user_converted / user_total * 100), 1) if user_total > 0 else 0
+                
+                # Last contact date for this user
+                last_contact = db.session.query(db.func.max(Lead.last_contact_date)).filter(
+                    Lead.assigned_to_id == user.id
+                ).scalar()
+                
+                # Leads by stage
+                stage_breakdown = db.session.query(
+                    Lead.stage,
+                    db.func.count(Lead.id)
+                ).filter(Lead.assigned_to_id == user.id).group_by(Lead.stage).all()
+                
+                if user_total > 0:  # Only include users with leads
+                    user_stats.append({
+                        'user': user,
+                        'total': user_total,
+                        'active': user_active,
+                        'converted': user_converted,
+                        'lost': user_lost,
+                        'conversion_rate': user_conv_rate,
+                        'last_contact': last_contact,
+                        'stage_breakdown': stage_breakdown
+                    })
+            
+            # Sort by conversion rate (descending)
+            user_stats.sort(key=lambda x: x['conversion_rate'], reverse=True)
+
         return render_template(
             "reports.html",
             total_leads=total_leads,
             active=active,
             converted=converted,
             lost=lost,
+            conversion_rate=conversion_rate,
             source_rows=source_rows,
             course_rows=course_rows,
-            show_all=show_all
+            show_all=show_all,
+            user_stats=user_stats
         )
 
     # -----------------------

@@ -22,7 +22,7 @@
           <div class="border rounded p-2 mb-2 bg-white">
             <div class="fw-semibold">{{ l.name }}</div>
             <div class="small text-muted">{{ l.phone }} | Score: {{ l.lead_score }}</div>
-            {% if l.assigned_to %}<div class="small text-info">👤 {{ l.assigned_to.full_name or l.assigned_to.username }}</div>{% endif %}
+            {% if l.assigned_to %}<div class="small text-info">👤 {{ l.assigned_to.full_name or l.assigned_to.username }}{% if l.last_contact_date %} • Last: {{ l.last_contact_date.strftime('%d-%b') }}{% endif %}</div>{% endif %}
             <div class="d-flex gap-1 mt-2 flex-wrap">
               <a class="btn btn-sm btn-outline-primary" href="{{ url_for('lead_detail', lead_id=l.id) }}">Open</a>
               {% set next_stages = get_next_stages(l.stage) %}
