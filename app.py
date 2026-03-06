@@ -236,7 +236,7 @@ def create_app():
 
         # Dropdown values
         stages = ["New Lead", "Contacted", "Interested", "Counseling Done", "Follow-up", "Converted", "Lost"]
-        sources = [x[0] for x in db.session.query(Lead.lead_source).distinct().filter(Lead.lead_source.isnot(None)).all()]
+        sources = LEAD_SOURCE_OPTIONS
 
         return render_template("leads.html", leads=leads, q=q, stage=stage, source=source, stages=stages, sources=sources, 
                              is_admin=(current_user.role == "admin"), all_users=all_users, 
@@ -682,11 +682,22 @@ def create_app():
         # Overall conversion rate
         conversion_rate = round((converted / total_leads * 100), 1) if total_leads > 0 else 0
 
-        # source performance
-        source_rows = db.session.query(
+        # source performance - include all predefined sources with conversion rates
+        source_query = db.session.query(
             Lead.lead_source,
-            db.func.count(Lead.id)
-        ).filter(query_filter).group_by(Lead.lead_source).all()
+            db.func.count(Lead.id),
+            db.func.count(db.case((Lead.status == "converted", 1), else_=None))
+        ).filter(query_filter, Lead.lead_source.isnot(None)).group_by(Lead.lead_source).all()
+        
+        # Create a dictionary of source stats (total, converted)
+        source_dict = {s: (total, converted) for s, total, converted in source_query}
+        
+        # Add all predefined sources with their stats
+        source_rows = []
+        for source in LEAD_SOURCE_OPTIONS:
+            total, converted = source_dict.get(source, (0, 0))
+            conv_rate = round((converted / total * 100), 1) if total > 0 else 0
+            source_rows.append((source, total, converted, conv_rate))
 
         # course interest (simple text contains)
         course_rows = db.session.query(

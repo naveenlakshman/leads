@@ -57,7 +57,7 @@
         <tbody>
           {% for stat in user_stats %}
           <tr>
-            <td><strong>{{ stat.user.full_name or stat.user.username }}</strong></td>
+            <td><a href="{{ url_for('leads_list', user_id=stat.user.id) }}" class="text-decoration-none"><strong>{{ stat.user.full_name or stat.user.username }}</strong></a></td>
             <td class="text-center">{{ stat.total }}</td>
             <td class="text-center"><span class="badge bg-info">{{ stat.active }}</span></td>
             <td class="text-center"><span class="badge bg-success">{{ stat.converted }}</span></td>
@@ -93,14 +93,19 @@
       <div class="card-header fw-semibold">📊 Lead Sources</div>
       <div class="card-body">
         <table class="table table-sm">
-          <thead><tr><th>Source</th><th class="text-end">Count</th><th class="text-end">%</th></tr></thead>
+          <thead><tr><th>Source</th><th class="text-end">Count</th><th class="text-end">%</th><th class="text-end">Conv. Rate</th></tr></thead>
           <tbody>
-            {% for s, c in source_rows %}
-              {% set pct = (c / total_leads * 100)|round(1) %}
+            {% for s, total, converted, conv_rate in source_rows %}
+              {% set pct = (total / total_leads * 100)|round(1) %}
               <tr>
-                <td>{{ s or 'Unknown' }}</td>
-                <td class="text-end">{{ c }}</td>
+                <td><a href="{{ url_for('leads_list', source=s) }}" class="text-decoration-none">{{ s or 'Unknown' }}</a></td>
+                <td class="text-end">{{ total }}</td>
                 <td class="text-end"><small class="text-muted">{{ pct }}%</small></td>
+                <td class="text-end">
+                  <strong class="{% if conv_rate >= 30 %}text-success{% elif conv_rate >= 15 %}text-warning{% else %}text-danger{% endif %}">
+                    {{ conv_rate }}%
+                  </strong>
+                </td>
               </tr>
             {% endfor %}
           </tbody>

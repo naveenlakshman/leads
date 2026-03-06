@@ -7,19 +7,19 @@
   <small class="text-muted">{{ activities|length }} activities</small>
 </div>
 
-<form method="get" class="row g-2 mb-3">
+<form method="get" class="row g-2 mb-3" id="activityLogFilterForm">
   <div class="col-md-2">
-    <input type="date" name="date_from" value="{{ date_from }}" class="form-control" placeholder="From Date">
+    <input type="date" name="date_from" id="dateFromActivity" value="{{ date_from }}" class="form-control" placeholder="From Date">
   </div>
   <div class="col-md-2">
-    <input type="date" name="date_to" value="{{ date_to }}" class="form-control" placeholder="To Date">
+    <input type="date" name="date_to" id="dateToActivity" value="{{ date_to }}" class="form-control" placeholder="To Date">
   </div>
   {% if is_admin %}
   <div class="col-md-2">
-    <select name="user_id" class="form-select">
-      <option value="">All Users</option>
+    <select name="user_id" id="userFilterActivity" class="form-select">
+      <option value="" {% if not selected_user_id %}selected{% endif %}>All Users</option>
       {% for user in all_users %}
-        <option value="{{ user.id }}" {% if selected_user_id == user.id|string %}selected{% endif %}>
+        <option value="{{ user.id }}" {% if selected_user_id and selected_user_id|string == user.id|string %}selected{% endif %}>
           {{ user.full_name or user.username }}
         </option>
       {% endfor %}
@@ -27,7 +27,7 @@
   </div>
   {% endif %}
   <div class="col-md-{% if is_admin %}2{% else %}3{% endif %}">
-    <select name="action_type" class="form-select">
+    <select name="action_type" id="actionTypeFilter" class="form-select">
       <option value="">All Actions</option>
       {% for action in all_action_types %}
         <option value="{{ action }}" {% if selected_action_type == action %}selected{% endif %}>
@@ -37,7 +37,7 @@
     </select>
   </div>
   <div class="col-md-1">
-    <button class="btn btn-secondary w-100">Filter</button>
+    <button class="btn btn-secondary w-100" type="submit">Filter</button>
   </div>
 </form>
 
@@ -105,5 +105,46 @@
     No activities found.
   </div>
 {% endif %}
+
+<script>
+  // Auto-filter on date or action type changes
+  document.addEventListener('DOMContentLoaded', function() {
+    const activityLogFilterForm = document.getElementById('activityLogFilterForm');
+    const dateFromInput = document.getElementById('dateFromActivity');
+    const dateToInput = document.getElementById('dateToActivity');
+    const userFilterSelect = document.getElementById('userFilterActivity');
+    const actionTypeSelect = document.getElementById('actionTypeFilter');
+    
+    if (activityLogFilterForm) {
+      // Auto-submit on date_from change
+      if (dateFromInput) {
+        dateFromInput.addEventListener('change', function() {
+          activityLogFilterForm.submit();
+        });
+      }
+      
+      // Auto-submit on date_to change
+      if (dateToInput) {
+        dateToInput.addEventListener('change', function() {
+          activityLogFilterForm.submit();
+        });
+      }
+      
+      // Auto-submit on user filter change (admin only)
+      if (userFilterSelect) {
+        userFilterSelect.addEventListener('change', function() {
+          activityLogFilterForm.submit();
+        });
+      }
+      
+      // Auto-submit on action type change
+      if (actionTypeSelect) {
+        actionTypeSelect.addEventListener('change', function() {
+          activityLogFilterForm.submit();
+        });
+      }
+    }
+  });
+</script>
 
 {% endblock %}
