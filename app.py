@@ -699,11 +699,16 @@ def create_app():
             conv_rate = round((converted / total * 100), 1) if total > 0 else 0
             source_rows.append((source, total, converted, conv_rate))
 
-        # course interest (simple text contains)
+        # course interest - with conversion rate
         course_rows = db.session.query(
             Lead.interested_courses,
-            db.func.count(Lead.id)
+            db.func.count(Lead.id),
+            db.func.count(db.case((Lead.status == "converted", 1), else_=None))
         ).filter(query_filter).group_by(Lead.interested_courses).all()
+        
+        # Calculate conversion rates for courses
+        course_rows = [(course, total, converted, round((converted/total*100), 1) if total > 0 else 0) 
+                       for course, total, converted in course_rows]
 
         # Get all users for the dropdown (including inactive)
         all_users = User.query.order_by(User.full_name).all()
