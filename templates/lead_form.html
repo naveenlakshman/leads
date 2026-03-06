@@ -79,6 +79,14 @@
       </select>
     </div>
     <div class="col-md-4">
+      <label class="form-label">Decision Maker</label>
+      <select class="form-select" name="decision_maker">
+        {% for dm in decision_makers %}
+          <option value="{{ dm }}" {% if lead and lead.decision_maker==dm %}selected{% elif not lead and dm=="Self" %}selected{% endif %}>{{ dm }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-4">
       <label class="form-label">Start Timeframe</label>
       <select class="form-select" name="start_timeframe">
         <option value="">(none)</option>

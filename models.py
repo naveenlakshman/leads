@@ -66,6 +66,9 @@ class Lead(db.Model):
     # Marketing
     lead_source = db.Column(db.String(80), nullable=True)        # Walk-in/Instagram/Referral etc.
 
+    # Decision Maker
+    decision_maker = db.Column(db.String(50), default="Self", nullable=False)  # Self/Parents/Friends
+
     # Readiness
     start_timeframe = db.Column(db.String(30), nullable=True)    # Immediately/1 week/1 month/Exploring
     lead_score = db.Column(db.Integer, default=0, nullable=False)

@@ -1,7 +1,6 @@
 Flask
 Flask-Login
 Flask-SQLAlchemy
+Flask-Migrate
 Werkzeug
 tzdata
-gunicorn
-backports.zoneinfo

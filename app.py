@@ -2,6 +2,7 @@
 from datetime import datetime, date
 from flask import Flask, render_template, request, redirect, url_for, flash, abort
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
+from flask_migrate import Migrate
 from config import Config
 from models import db, User, Lead, FollowUp, Activity
 from utils.auth import admin_required
@@ -12,6 +13,9 @@ def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
 
+    # Initialize Flask-Migrate
+    migrate = Migrate(app, db)
+
     # predefined dropdown options used across lead forms
     GENDER_OPTIONS = ["Male", "Female", "Other"]
     EDUCATION_OPTIONS = ["Below 10th", "SSLC", "PUC", "Degree", "Working", "Job seeker"]
@@ -19,6 +23,7 @@ def create_app():
     CAREER_GOAL_OPTIONS = ["Job", "Internship", "Skills", "Business"]
     LEAD_SOURCE_OPTIONS = ["Walk-in", "Instagram", "Referral","Google Call","Poster" , "Other",]
     TIMEFRAME_OPTIONS = ["Immediately", "1 week", "1 month", "Exploring"]
+    DECISION_MAKER_OPTIONS = ["Self", "Parents", "Friends"]
 
     FOLLOWUP_METHODS = ["Call", "WhatsApp", "Email", "In-person", "Other"]
     FOLLOWUP_OUTCOMES = ["Interested", "Call back", "Not interested", "No answer", "Other"]
@@ -258,6 +263,7 @@ def create_app():
                 career_goal=request.form.get("career_goal", "").strip() or None,
                 interested_courses=request.form.get("interested_courses", "").strip() or None,
                 lead_source=request.form.get("lead_source", "").strip() or None,
+                decision_maker=request.form.get("decision_maker", "Self").strip() or "Self",
                 start_timeframe=request.form.get("start_timeframe", "").strip() or None,
                 stage=request.form.get("stage", "New Lead").strip() or "New Lead",
                 notes=request.form.get("notes", "").strip() or None,
@@ -292,6 +298,7 @@ def create_app():
                     streams=STREAM_OPTIONS,
                     career_goals=CAREER_GOAL_OPTIONS,
                     lead_sources=LEAD_SOURCE_OPTIONS,
+                    decision_makers=DECISION_MAKER_OPTIONS,
                     timeframes=TIMEFRAME_OPTIONS,
                 )
 
@@ -318,6 +325,7 @@ def create_app():
             streams=STREAM_OPTIONS,
             career_goals=CAREER_GOAL_OPTIONS,
             lead_sources=LEAD_SOURCE_OPTIONS,
+            decision_makers=DECISION_MAKER_OPTIONS,
             timeframes=TIMEFRAME_OPTIONS,
         )
 
@@ -353,6 +361,7 @@ def create_app():
             lead.career_goal = request.form.get("career_goal", "").strip() or None
             lead.interested_courses = request.form.get("interested_courses", "").strip() or None
             lead.lead_source = request.form.get("lead_source", "").strip() or None
+            lead.decision_maker = request.form.get("decision_maker", "Self").strip() or "Self"
             lead.start_timeframe = request.form.get("start_timeframe", "").strip() or None
 
             lead.stage = request.form.get("stage", lead.stage).strip() or lead.stage
@@ -396,6 +405,7 @@ def create_app():
             streams=STREAM_OPTIONS,
             career_goals=CAREER_GOAL_OPTIONS,
             lead_sources=LEAD_SOURCE_OPTIONS,
+            decision_makers=DECISION_MAKER_OPTIONS,
             timeframes=TIMEFRAME_OPTIONS,
         )
 
