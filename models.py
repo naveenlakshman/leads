@@ -134,3 +134,39 @@ class FollowUp(db.Model):
 
     def __repr__(self) -> str:
         return f"<FollowUp {self.id} lead={self.lead_id}>"
+
+
+# ---------------------------
+# Activity Model (Audit Log)
+# ---------------------------
+class Activity(db.Model):
+    __tablename__ = "activities"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # who performed the action
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    user = db.relationship("User", backref=db.backref("activities", lazy=True))
+
+    # what lead is involved
+    lead_id = db.Column(db.Integer, db.ForeignKey("leads.id"), nullable=False)
+    lead = db.relationship("Lead", backref=db.backref("activities", lazy=True))
+
+    # type of action: "lead_created", "lead_edited", "stage_changed", "followup_added", "lead_converted", "lead_lost"
+    action_type = db.Column(db.String(50), nullable=False, index=True)
+
+    # description of what happened
+    description = db.Column(db.Text, nullable=True)
+
+    # optional: track what changed (field name)
+    field_changed = db.Column(db.String(80), nullable=True)
+
+    # optional: old and new values (for tracking changes)
+    old_value = db.Column(db.String(255), nullable=True)
+    new_value = db.Column(db.String(255), nullable=True)
+
+    # when it happened
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    def __repr__(self) -> str:
+        return f"<Activity {self.id} {self.action_type} by {self.user_id} on lead {self.lead_id}>"

@@ -28,7 +28,11 @@
       {% if current_user.role == 'admin' %}
       <hr>
       <a class="nav-link {{ 'active' if request.endpoint=='reports' else '' }}" href="{{ url_for('reports') }}">📊 Reports</a>
+      <a class="nav-link {{ 'active' if request.endpoint=='activity_log' else '' }}" href="{{ url_for('activity_log') }}">📋 Activity Log</a>
       <a class="nav-link {{ 'active' if request.endpoint in ['users_list'] else '' }}" href="{{ url_for('users_list') }}">👤 Users</a>
+      {% else %}
+      <hr>
+      <a class="nav-link {{ 'active' if request.endpoint=='activity_log' else '' }}" href="{{ url_for('activity_log') }}">📋 My Activity</a>
       {% endif %}
 
       <hr>

@@ -28,3 +28,33 @@ def parse_date(date_str: Optional[str]):
         return datetime.strptime(date_str, "%Y-%m-%d").date()
     except ValueError:
         return None
+
+
+def log_activity(user_id: int, lead_id: int, action_type: str, description: str = None, 
+                 field_changed: str = None, old_value: str = None, new_value: str = None):
+    """
+    Log user activity for audit trail.
+    
+    Args:
+        user_id: ID of user performing the action
+        lead_id: ID of lead involved
+        action_type: Type of action (lead_created, lead_edited, stage_changed, followup_added, lead_converted, lead_lost)
+        description: Human-readable description of the action
+        field_changed: Name of field that changed (e.g., "stage", "notes")
+        old_value: Previous value of the field
+        new_value: New value of the field
+    """
+    from models import db, Activity
+    
+    activity = Activity(
+        user_id=user_id,
+        lead_id=lead_id,
+        action_type=action_type,
+        description=description,
+        field_changed=field_changed,
+        old_value=old_value,
+        new_value=new_value
+    )
+    
+    db.session.add(activity)
+    db.session.commit()

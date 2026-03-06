@@ -5,9 +5,16 @@
 <div class="d-flex justify-content-between align-items-center mb-3">
   <h5 class="mb-0">Pipeline</h5>
   {% if is_admin %}
-    <div class="d-flex gap-2">
-      <a class="btn btn-sm {% if show_all %}btn-primary{% else %}btn-outline-primary{% endif %}" href="{{ url_for('pipeline', show_all=1) }}">Show All</a>
-      <a class="btn btn-sm {% if not show_all %}btn-primary{% else %}btn-outline-primary{% endif %}" href="{{ url_for('pipeline') }}">My Leads</a>
+    <div>
+      <label for="userFilter" class="form-label mb-0 me-2 d-inline-block">Filter by User:</label>
+      <select id="userFilter" class="form-select d-inline-block w-auto">
+        <option value="">All Leads</option>
+        {% for user in all_users %}
+          <option value="{{ user.id }}" {% if selected_user_id == user.id|string %}selected{% endif %}>
+            {{ user.full_name or user.username }}
+          </option>
+        {% endfor %}
+      </select>
     </div>
   {% endif %}
 </div>
@@ -16,7 +23,7 @@
   {% for st in stages %}
   <div class="col-lg-3 col-md-6">
     <div class="card h-100">
-      <div class="card-header fw-semibold">{{ st }}</div>
+      <div class="card-header fw-semibold">{{ st }} <span class="badge bg-secondary">{{ data[st]|length }}</span></div>
       <div class="card-body">
         {% for l in data[st] %}
           <div class="border rounded p-2 mb-2 bg-white">
@@ -56,5 +63,41 @@
   </div>
   {% endfor %}
 </div>
+
+<script>
+  // Initialize filter dropdown with localStorage
+  document.addEventListener('DOMContentLoaded', function() {
+    const userFilterSelect = document.getElementById('userFilter');
+    
+    if (userFilterSelect) {
+      // Load saved filter from localStorage
+      const savedUserId = localStorage.getItem('pipelineUserFilter');
+      
+      // Set dropdown value to saved or current selection
+      if (savedUserId) {
+        userFilterSelect.value = savedUserId;
+      }
+      
+      // Handle dropdown changes
+      userFilterSelect.addEventListener('change', function() {
+        const selectedUserId = this.value;
+        
+        // Save to localStorage
+        if (selectedUserId) {
+          localStorage.setItem('pipelineUserFilter', selectedUserId);
+        } else {
+          localStorage.removeItem('pipelineUserFilter');
+        }
+        
+        // Update URL and reload
+        if (selectedUserId) {
+          window.location.href = `{{ url_for('pipeline') }}?user_id=${selectedUserId}`;
+        } else {
+          window.location.href = `{{ url_for('pipeline') }}`;
+        }
+      });
+    }
+  });
+</script>
 
 {% endblock %}

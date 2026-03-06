@@ -3,9 +3,9 @@ from datetime import datetime, date
 from flask import Flask, render_template, request, redirect, url_for, flash, abort
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from config import Config
-from models import db, User, Lead, FollowUp
+from models import db, User, Lead, FollowUp, Activity
 from utils.auth import admin_required
-from utils.helpers import parse_date, utc_to_ist
+from utils.helpers import parse_date, utc_to_ist, log_activity
 from utils.lead_score import compute_lead_score
 
 def create_app():
@@ -198,16 +198,25 @@ def create_app():
         q = request.args.get("q", "").strip()
         stage = request.args.get("stage", "").strip()
         source = request.args.get("source", "").strip()
-        show_all = request.args.get("show_all", "").strip() == "1"
+        user_id = request.args.get("user_id", "").strip()
 
         query = Lead.query
 
-        # Counselors see only their leads; admins can optionally see all
+        # Counselors see only their leads; admins see all by default or filter by user_id
         if current_user.role == "counselor":
             query = query.filter(Lead.assigned_to_id == current_user.id)
-        elif not show_all:
-            # Admin viewing their own leads by default
-            query = query.filter(Lead.assigned_to_id == current_user.id)
+            all_users = [current_user]  # Counselors only see themselves
+        else:
+            # Admin: show all by default, or filter by specific user if user_id is provided
+            if user_id:
+                try:
+                    user_id = int(user_id)
+                    query = query.filter(Lead.assigned_to_id == user_id)
+                except (ValueError, TypeError):
+                    pass  # Invalid user_id, show all
+            
+            # Get all users (including inactive) for the dropdown
+            all_users = User.query.order_by(User.full_name).all()
 
         if q:
             like = f"%{q}%"
@@ -229,7 +238,9 @@ def create_app():
         stages = ["New Lead", "Contacted", "Interested", "Counseling Done", "Follow-up", "Converted", "Lost"]
         sources = [x[0] for x in db.session.query(Lead.lead_source).distinct().filter(Lead.lead_source.isnot(None)).all()]
 
-        return render_template("leads.html", leads=leads, q=q, stage=stage, source=source, stages=stages, sources=sources, show_all=show_all, is_admin=(current_user.role == "admin"))
+        return render_template("leads.html", leads=leads, q=q, stage=stage, source=source, stages=stages, sources=sources, 
+                             is_admin=(current_user.role == "admin"), all_users=all_users, 
+                             selected_user_id=user_id if user_id else None)
 
     @app.route("/leads/new", methods=["GET", "POST"])
     @login_required
@@ -259,6 +270,16 @@ def create_app():
 
             # assign to current user by default
             lead.assigned_to_id = current_user.id
+            
+            # set status based on stage
+            if lead.stage == "Converted":
+                lead.status = "converted"
+                lead.next_followup_date = None
+            elif lead.stage == "Lost":
+                lead.status = "lost"
+                lead.next_followup_date = None
+            else:
+                lead.status = "active"
 
             if not lead.name or not lead.phone:
                 flash("Name and Phone are required.", "danger")
@@ -276,6 +297,15 @@ def create_app():
 
             db.session.add(lead)
             db.session.commit()
+            
+            # Log activity
+            log_activity(
+                user_id=current_user.id,
+                lead_id=lead.id,
+                action_type="lead_created",
+                description=f"Lead created: {lead.name} ({lead.phone}) - Stage: {lead.stage}, Source: {lead.lead_source}"
+            )
+            
             flash("Lead created successfully.", "success")
             return redirect(url_for("leads_list"))
 
@@ -337,12 +367,23 @@ def create_app():
             # status auto-sync
             if lead.stage == "Converted":
                 lead.status = "converted"
+                lead.next_followup_date = None
             elif lead.stage == "Lost":
                 lead.status = "lost"
+                lead.next_followup_date = None
             else:
                 lead.status = "active"
 
             db.session.commit()
+            
+            # Log activity
+            log_activity(
+                user_id=current_user.id,
+                lead_id=lead.id,
+                action_type="lead_edited",
+                description=f"Lead updated: {lead.name} - Current Stage: {lead.stage}"
+            )
+            
             flash("Lead updated.", "success")
             return redirect(url_for("lead_detail", lead_id=lead.id))
 
@@ -375,6 +416,15 @@ def create_app():
         lead.status = "converted"
         lead.next_followup_date = None
         db.session.commit()
+        
+        # Log activity
+        log_activity(
+            user_id=current_user.id,
+            lead_id=lead.id,
+            action_type="lead_converted",
+            description=f"Lead marked as Converted: {lead.name}"
+        )
+        
         flash("Lead marked as Converted.", "success")
         return redirect(url_for("lead_detail", lead_id=lead.id))
 
@@ -388,6 +438,15 @@ def create_app():
         lead.lost_reason = reason
         lead.next_followup_date = None
         db.session.commit()
+        
+        # Log activity
+        log_activity(
+            user_id=current_user.id,
+            lead_id=lead.id,
+            action_type="lead_lost",
+            description=f"Lead marked as Lost: {lead.name} - Reason: {reason or 'Not specified'}"
+        )
+        
         flash("Lead marked as Lost.", "warning")
         return redirect(url_for("lead_detail", lead_id=lead.id))
 
@@ -473,6 +532,15 @@ def create_app():
             lead.stage = "Contacted"
 
         db.session.commit()
+        
+        # Log activity
+        log_activity(
+            user_id=current_user.id,
+            lead_id=lead.id,
+            action_type="followup_added",
+            description=f"Follow-up added for {lead.name} - Method: {method or 'Not specified'}, Outcome: {outcome or 'Not specified'}"
+        )
+        
         flash("Follow-up saved.", "success")
         return redirect(url_for("lead_detail", lead_id=lead.id))
 
@@ -498,21 +566,35 @@ def create_app():
     @app.route("/pipeline")
     @login_required
     def pipeline():
-        show_all = request.args.get("show_all", "").strip() == "1"
         stages = ["New Lead", "Contacted", "Interested", "Counseling Done", "Follow-up", "Converted", "Lost"]
         
-        # Counselors see only their leads; admins can optionally see all
+        # Get user_id filter parameter (defaults to None for show all)
+        user_id = request.args.get("user_id", "").strip()
+        
+        # Counselors see only their leads; admins see all by default or filter by user_id
         base_query = Lead.query
         if current_user.role == "counselor":
             base_query = base_query.filter(Lead.assigned_to_id == current_user.id)
-        elif not show_all:
-            # Admin viewing their own leads by default
-            base_query = base_query.filter(Lead.assigned_to_id == current_user.id)
+            all_users = [current_user]  # Counselors only see themselves
+        else:
+            # Admin: show all by default, or filter by specific user if user_id is provided
+            if user_id:
+                try:
+                    user_id = int(user_id)
+                    base_query = base_query.filter(Lead.assigned_to_id == user_id)
+                except (ValueError, TypeError):
+                    pass  # Invalid user_id, show all
+            
+            # Get all users (including inactive) for the dropdown
+            all_users = User.query.order_by(User.full_name).all()
         
         data = {}
         for st in stages:
             data[st] = base_query.filter(Lead.stage == st).order_by(Lead.updated_at.desc()).limit(50).all()
-        return render_template("pipeline.html", stages=stages, data=data, get_next_stages=get_next_stages, show_all=show_all, is_admin=(current_user.role == "admin"))
+        
+        return render_template("pipeline.html", stages=stages, data=data, get_next_stages=get_next_stages, 
+                             is_admin=(current_user.role == "admin"), all_users=all_users, 
+                             selected_user_id=user_id if user_id else None)
 
     # quick stage update (buttons)
     @app.route("/leads/<int:lead_id>/stage", methods=["POST"])
@@ -523,6 +605,7 @@ def create_app():
         if st not in ["New Lead", "Contacted", "Interested", "Counseling Done", "Follow-up", "Converted", "Lost"]:
             abort(400)
 
+        old_stage = lead.stage
         lead.stage = st
         if st == "Converted":
             lead.status = "converted"
@@ -533,6 +616,18 @@ def create_app():
         else:
             lead.status = "active"
         db.session.commit()
+        
+        # Log activity
+        log_activity(
+            user_id=current_user.id,
+            lead_id=lead.id,
+            action_type="stage_changed",
+            description=f"Lead stage changed: {lead.name} - {old_stage} → {st}",
+            field_changed="stage",
+            old_value=old_stage,
+            new_value=st
+        )
+        
         return redirect(request.referrer or url_for("pipeline"))
 
     # -----------------------
@@ -542,16 +637,47 @@ def create_app():
     @login_required
     @admin_required
     def reports():
-        show_all = request.args.get("show_all", "").strip() == "1"
+        user_id_filter = request.args.get("user_id", "").strip()
+        date_from = request.args.get("date_from", "").strip()
+        date_to = request.args.get("date_to", "").strip()
         today = date.today()
 
-        # Admin can toggle between their leads and all leads
-        base_filter = (Lead.assigned_to_id == current_user.id) if not show_all else True
+        # Build base filter
+        base_filter = []
+        
+        # User filter
+        if user_id_filter:
+            try:
+                user_id_filter = int(user_id_filter)
+                base_filter.append(Lead.assigned_to_id == user_id_filter)
+            except (ValueError, TypeError):
+                pass
+        
+        # Date range filters
+        if date_from:
+            try:
+                from_date = datetime.strptime(date_from, "%Y-%m-%d").date()
+                base_filter.append(db.func.date(Lead.created_at) >= from_date)
+            except ValueError:
+                date_from = ""
+        
+        if date_to:
+            try:
+                to_date = datetime.strptime(date_to, "%Y-%m-%d").date()
+                base_filter.append(db.func.date(Lead.created_at) <= to_date)
+            except ValueError:
+                date_to = ""
+        
+        # Combine all filters with AND
+        if base_filter:
+            query_filter = db.and_(*base_filter)
+        else:
+            query_filter = True
 
-        total_leads = Lead.query.filter(base_filter).count()
-        active = Lead.query.filter(Lead.status == "active", base_filter).count()
-        converted = Lead.query.filter(Lead.status == "converted", base_filter).count()
-        lost = Lead.query.filter(Lead.status == "lost", base_filter).count()
+        total_leads = Lead.query.filter(query_filter).count()
+        active = Lead.query.filter(Lead.status == "active", query_filter).count()
+        converted = Lead.query.filter(Lead.status == "converted", query_filter).count()
+        lost = Lead.query.filter(Lead.status == "lost", query_filter).count()
 
         # Overall conversion rate
         conversion_rate = round((converted / total_leads * 100), 1) if total_leads > 0 else 0
@@ -560,35 +686,57 @@ def create_app():
         source_rows = db.session.query(
             Lead.lead_source,
             db.func.count(Lead.id)
-        ).filter(base_filter).group_by(Lead.lead_source).all()
+        ).filter(query_filter).group_by(Lead.lead_source).all()
 
         # course interest (simple text contains)
         course_rows = db.session.query(
             Lead.interested_courses,
             db.func.count(Lead.id)
-        ).filter(base_filter).group_by(Lead.interested_courses).all()
+        ).filter(query_filter).group_by(Lead.interested_courses).all()
 
-        # User Performance Metrics (only for show_all to see all users)
+        # Get all users for the dropdown (including inactive)
+        all_users = User.query.order_by(User.full_name).all()
+
+        # User Performance Metrics (show all users if no specific filter)
         user_stats = []
-        if show_all:
-            users = User.query.filter(User.role == "counselor").all()
+        if not user_id_filter:
+            # Show summary of all users with leads
+            users = all_users
             for user in users:
-                user_total = Lead.query.filter(Lead.assigned_to_id == user.id).count()
-                user_active = Lead.query.filter(Lead.assigned_to_id == user.id, Lead.status == "active").count()
-                user_converted = Lead.query.filter(Lead.assigned_to_id == user.id, Lead.status == "converted").count()
-                user_lost = Lead.query.filter(Lead.assigned_to_id == user.id, Lead.status == "lost").count()
+                user_base_filter = [Lead.assigned_to_id == user.id]
+                
+                # Apply date filters
+                if date_from:
+                    try:
+                        from_date = datetime.strptime(date_from, "%Y-%m-%d").date()
+                        user_base_filter.append(db.func.date(Lead.created_at) >= from_date)
+                    except ValueError:
+                        pass
+                
+                if date_to:
+                    try:
+                        to_date = datetime.strptime(date_to, "%Y-%m-%d").date()
+                        user_base_filter.append(db.func.date(Lead.created_at) <= to_date)
+                    except ValueError:
+                        pass
+                
+                user_query_filter = db.and_(*user_base_filter) if user_base_filter else True
+                user_query = Lead.query.filter(user_query_filter)
+                
+                user_total = user_query.count()
+                user_active = user_query.filter(Lead.status == "active").count()
+                user_converted = user_query.filter(Lead.status == "converted").count()
+                user_lost = user_query.filter(Lead.status == "lost").count()
                 user_conv_rate = round((user_converted / user_total * 100), 1) if user_total > 0 else 0
                 
                 # Last contact date for this user
-                last_contact = db.session.query(db.func.max(Lead.last_contact_date)).filter(
-                    Lead.assigned_to_id == user.id
-                ).scalar()
+                last_contact = user_query.with_entities(db.func.max(Lead.last_contact_date)).scalar()
                 
                 # Leads by stage
-                stage_breakdown = db.session.query(
+                stage_breakdown = user_query.with_entities(
                     Lead.stage,
                     db.func.count(Lead.id)
-                ).filter(Lead.assigned_to_id == user.id).group_by(Lead.stage).all()
+                ).group_by(Lead.stage).all()
                 
                 if user_total > 0:  # Only include users with leads
                     user_stats.append({
@@ -614,8 +762,78 @@ def create_app():
             conversion_rate=conversion_rate,
             source_rows=source_rows,
             course_rows=course_rows,
-            show_all=show_all,
+            all_users=all_users,
+            selected_user_id=user_id_filter if user_id_filter else None,
+            date_from=date_from,
+            date_to=date_to,
             user_stats=user_stats
+        )
+
+    # -----------------------
+    # ACTIVITY LOG (audit trail)
+    # -----------------------
+    @app.route("/activity-log")
+    @login_required
+    def activity_log():
+        # Users see their own activities; admins can see all or filter by user
+        date_from = request.args.get("date_from", "").strip()
+        date_to = request.args.get("date_to", "").strip()
+        user_id_filter = request.args.get("user_id", "").strip()
+        action_type_filter = request.args.get("action_type", "").strip()
+        
+        query = Activity.query
+        
+        # Counselors see only their own activities
+        if current_user.role == "counselor":
+            query = query.filter(Activity.user_id == current_user.id)
+            all_users = [current_user]
+        else:
+            # Admin can filter by user
+            if user_id_filter:
+                try:
+                    user_id_filter = int(user_id_filter)
+                    query = query.filter(Activity.user_id == user_id_filter)
+                except (ValueError, TypeError):
+                    pass
+            
+            all_users = User.query.order_by(User.full_name).all()
+        
+        # Date range filter
+        if date_from:
+            try:
+                from_date = datetime.strptime(date_from, "%Y-%m-%d").date()
+                query = query.filter(db.func.date(Activity.created_at) >= from_date)
+            except ValueError:
+                pass
+        
+        if date_to:
+            try:
+                to_date = datetime.strptime(date_to, "%Y-%m-%d").date()
+                query = query.filter(db.func.date(Activity.created_at) <= to_date)
+            except ValueError:
+                pass
+        
+        # Action type filter
+        if action_type_filter:
+            query = query.filter(Activity.action_type == action_type_filter)
+        
+        # Get all activities sorted by newest first
+        activities = query.order_by(Activity.created_at.desc()).all()
+        
+        # Get unique action types for dropdown
+        all_action_types = db.session.query(Activity.action_type).distinct().order_by(Activity.action_type).all()
+        all_action_types = [a[0] for a in all_action_types if a[0]]
+        
+        return render_template(
+            "activity_log.html",
+            activities=activities,
+            all_users=all_users,
+            all_action_types=all_action_types,
+            date_from=date_from,
+            date_to=date_to,
+            selected_user_id=user_id_filter if user_id_filter else None,
+            selected_action_type=action_type_filter,
+            is_admin=(current_user.role == "admin")
         )
 
     # -----------------------

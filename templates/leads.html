@@ -3,36 +3,42 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
   <h2 class="mb-0">Leads</h2>
-  <div class="d-flex gap-2">
-    {% if is_admin %}
-      <a class="btn btn-sm {% if show_all %}btn-primary{% else %}btn-outline-primary{% endif %}" href="{{ url_for('leads_list', q=q, stage=stage, source=source, show_all=1) }}">Show All</a>
-      <a class="btn btn-sm {% if not show_all %}btn-primary{% else %}btn-outline-primary{% endif %}" href="{{ url_for('leads_list', q=q, stage=stage, source=source) }}">My Leads</a>
-    {% endif %}
-    <a class="btn btn-sm btn-primary" href="{{ url_for('lead_create') }}">New Lead</a>
-  </div>
+  <a class="btn btn-sm btn-primary" href="{{ url_for('lead_create') }}">New Lead</a>
 </div>
 
-<form method="get" class="row g-2 mb-3">
-  <div class="col-md-4">
+<form method="get" class="row g-2 mb-3" id="filterForm">
+  <div class="col-md-3">
     <input type="text" name="q" value="{{ q }}" class="form-control" placeholder="Search name/phone">
   </div>
-  <div class="col-md-3">
-    <select name="stage" class="form-select">
+  {% if is_admin %}
+  <div class="col-md-2">
+    <select id="userFilter" name="user_id" class="form-select">
+      <option value="">All Users</option>
+      {% for user in all_users %}
+        <option value="{{ user.id }}" {% if selected_user_id == user.id|string %}selected{% endif %}>
+          {{ user.full_name or user.username }}
+        </option>
+      {% endfor %}
+    </select>
+  </div>
+  {% endif %}
+  <div class="col-md-{% if is_admin %}2{% else %}3{% endif %}">
+    <select name="stage" id="stageFilter" class="form-select">
       <option value="">All stages</option>
       {% for s in stages %}
         <option value="{{ s }}" {% if stage==s %}selected{% endif %}>{{ s }}</option>
       {% endfor %}
     </select>
   </div>
-  <div class="col-md-3">
-    <select name="source" class="form-select">
+  <div class="col-md-{% if is_admin %}2{% else %}3{% endif %}">
+    <select name="source" id="sourceFilter" class="form-select">
       <option value="">All sources</option>
       {% for s in sources %}
         <option value="{{ s }}" {% if source==s %}selected{% endif %}>{{ s }}</option>
       {% endfor %}
     </select>
   </div>
-  <div class="col-md-2">
+  <div class="col-md-1">
     <button class="btn btn-secondary w-100">Filter</button>
   </div>
 </form>
@@ -58,4 +64,52 @@
 {% else %}
   <div class="text-muted">No leads found.</div>
 {% endif %}
+
+<script>
+  // Initialize auto-filter dropdowns with localStorage
+  document.addEventListener('DOMContentLoaded', function() {
+    const filterForm = document.getElementById('filterForm');
+    const userFilterSelect = document.getElementById('userFilter');
+    const stageFilter = document.getElementById('stageFilter');
+    const sourceFilter = document.getElementById('sourceFilter');
+    
+    if (userFilterSelect) {
+      // Load saved user filter from localStorage
+      const savedUserId = localStorage.getItem('leadsUserFilter');
+      if (savedUserId) {
+        userFilterSelect.value = savedUserId;
+      }
+      
+      // Auto-submit on user filter change
+      userFilterSelect.addEventListener('change', function() {
+        const selectedUserId = this.value;
+        
+        // Save to localStorage
+        if (selectedUserId) {
+          localStorage.setItem('leadsUserFilter', selectedUserId);
+        } else {
+          localStorage.removeItem('leadsUserFilter');
+        }
+        
+        // Submit form
+        filterForm.submit();
+      });
+    }
+    
+    // Auto-submit on stage filter change
+    if (stageFilter) {
+      stageFilter.addEventListener('change', function() {
+        filterForm.submit();
+      });
+    }
+    
+    // Auto-submit on source filter change
+    if (sourceFilter) {
+      sourceFilter.addEventListener('change', function() {
+        filterForm.submit();
+      });
+    }
+  });
+</script>
+
 {% endblock %}
