@@ -112,6 +112,13 @@ def create_app():
             query_filter
         ).count()
 
+        total_leads_this_month = Lead.query.filter(
+            db.extract("month", Lead.created_at) == today.month,
+            db.extract("year", Lead.created_at) == today.year,
+            Lead.is_deleted == False,
+            query_filter
+        ).count()
+
         followups_due = Lead.query.filter(
             Lead.status == "active",
             Lead.next_followup_date.isnot(None),
@@ -136,11 +143,25 @@ def create_app():
         ).count()
 
         total_active = Lead.query.filter(Lead.status == "active", Lead.is_deleted == False, query_filter).count()
+        active_this_month = Lead.query.filter(
+            Lead.status == "active",
+            db.extract("month", Lead.created_at) == today.month,
+            db.extract("year", Lead.created_at) == today.year,
+            Lead.is_deleted == False,
+            query_filter
+        ).count()
         
         # Enhanced metrics
         total_leads = Lead.query.filter(Lead.is_deleted == False, query_filter).count()
         converted_total = Lead.query.filter(Lead.status == "converted", Lead.is_deleted == False, query_filter).count()
         lost_total = Lead.query.filter(Lead.status == "lost", Lead.is_deleted == False, query_filter).count()
+        lost_this_month = Lead.query.filter(
+            Lead.status == "lost",
+            db.extract("month", Lead.updated_at) == today.month,
+            db.extract("year", Lead.updated_at) == today.year,
+            Lead.is_deleted == False,
+            query_filter
+        ).count()
         
         # Conversion rate
         conversion_rate = round((converted_total / total_leads * 100), 1) if total_leads > 0 else 0
@@ -188,9 +209,12 @@ def create_app():
             hot_leads=hot_leads,
             converted_this_month=converted_this_month,
             total_active=total_active,
+            active_this_month=active_this_month,
             total_leads=total_leads,
+            total_leads_this_month=total_leads_this_month,
             converted_total=converted_total,
             lost_total=lost_total,
+            lost_this_month=lost_this_month,
             conversion_rate=conversion_rate,
             stage_breakdown=stage_breakdown,
             high_risk_leads=high_risk_leads,
@@ -209,25 +233,47 @@ def create_app():
         stage = request.args.get("stage", "").strip()
         source = request.args.get("source", "").strip()
         user_id = request.args.get("user_id", "").strip()
+        today = date.today()
 
-        query = Lead.query.filter(Lead.is_deleted == False)
+        base_query = Lead.query.filter(Lead.is_deleted == False)
 
         # Counselors see only their leads; admins see all by default or filter by user_id
         if current_user.role == "counselor":
-            query = query.filter(Lead.assigned_to_id == current_user.id)
+            base_query = base_query.filter(Lead.assigned_to_id == current_user.id)
             all_users = [current_user]  # Counselors only see themselves
         else:
             # Admin: show all by default, or filter by specific user if user_id is provided
             if user_id:
                 try:
-                    user_id = int(user_id)
-                    query = query.filter(Lead.assigned_to_id == user_id)
+                    base_query = base_query.filter(Lead.assigned_to_id == int(user_id))
                 except (ValueError, TypeError):
                     pass  # Invalid user_id, show all
             
             # Get all users (including inactive) for the dropdown
             all_users = User.query.order_by(User.full_name).all()
 
+        metrics = {
+            "active_overall": base_query.filter(Lead.status == "active").count(),
+            "active_this_month": base_query.filter(
+                Lead.status == "active",
+                db.extract("month", Lead.created_at) == today.month,
+                db.extract("year", Lead.created_at) == today.year
+            ).count(),
+            "converted_overall": base_query.filter(Lead.status == "converted").count(),
+            "converted_this_month": base_query.filter(
+                Lead.status == "converted",
+                db.extract("month", Lead.updated_at) == today.month,
+                db.extract("year", Lead.updated_at) == today.year
+            ).count(),
+            "lost_overall": base_query.filter(Lead.status == "lost").count(),
+            "lost_this_month": base_query.filter(
+                Lead.status == "lost",
+                db.extract("month", Lead.updated_at) == today.month,
+                db.extract("year", Lead.updated_at) == today.year
+            ).count(),
+        }
+
+        query = base_query
         if q:
             like = f"%{q}%"
             query = query.filter(
@@ -250,7 +296,14 @@ def create_app():
 
         return render_template("leads.html", leads=leads, q=q, stage=stage, source=source, stages=stages, sources=sources, 
                              is_admin=(current_user.role == "admin"), all_users=all_users, 
-                             selected_user_id=user_id if user_id else None)
+                             selected_user_id=user_id if user_id else None, metrics=metrics)
+
+    @app.route("/admin/deleted-leads")
+    @login_required
+    @admin_required
+    def deleted_leads():
+        deleted = Lead.query.filter(Lead.is_deleted == True).order_by(Lead.updated_at.desc()).all()
+        return render_template("deleted_leads.html", leads=deleted)
 
     @app.route("/leads/new", methods=["GET", "POST"])
     @login_required
@@ -700,11 +753,11 @@ def create_app():
 
         total_leads = Lead.query.filter(query_filter).count()
         active = Lead.query.filter(Lead.status == "active", query_filter).count()
-        converted = Lead.query.filter(Lead.status == "converted", query_filter).count()
+        converted_total = Lead.query.filter(Lead.status == "converted", query_filter).count()
         lost = Lead.query.filter(Lead.status == "lost", query_filter).count()
 
         # Overall conversion rate
-        conversion_rate = round((converted / total_leads * 100), 1) if total_leads > 0 else 0
+        conversion_rate = round((converted_total / total_leads * 100), 1) if total_leads > 0 else 0
 
         # source performance - include all predefined sources with conversion rates
         source_query = db.session.query(
@@ -714,14 +767,14 @@ def create_app():
         ).filter(query_filter, Lead.lead_source.isnot(None)).group_by(Lead.lead_source).all()
         
         # Create a dictionary of source stats (total, converted)
-        source_dict = {s: (total, converted) for s, total, converted in source_query}
+        source_dict = {s: (total, source_converted) for s, total, source_converted in source_query}
         
         # Add all predefined sources with their stats
         source_rows = []
         for source in LEAD_SOURCE_OPTIONS:
-            total, converted = source_dict.get(source, (0, 0))
-            conv_rate = round((converted / total * 100), 1) if total > 0 else 0
-            source_rows.append((source, total, converted, conv_rate))
+            total, source_converted = source_dict.get(source, (0, 0))
+            conv_rate = round((source_converted / total * 100), 1) if total > 0 else 0
+            source_rows.append((source, total, source_converted, conv_rate))
 
         # course interest - with conversion rate
         course_rows = db.session.query(
@@ -797,7 +850,7 @@ def create_app():
             "reports.html",
             total_leads=total_leads,
             active=active,
-            converted=converted,
+            converted=converted_total,
             lost=lost,
             conversion_rate=conversion_rate,
             source_rows=source_rows,

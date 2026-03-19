@@ -13,22 +13,46 @@
   <div class="col-md-3">
     <div class="card p-3 border-start border-primary border-3">
       <div class="text-muted small">Total Leads</div>
-      <div class="fs-3 fw-bold">{{ total_leads }}</div>
-      <div class="small text-muted mt-1">{{ total_active }} active</div>
+      <div class="d-flex justify-content-between align-items-end mt-1">
+        <div>
+          <div class="fs-3 fw-bold">{{ total_leads }}</div>
+          <div class="small text-muted">Overall</div>
+        </div>
+        <div class="text-end">
+          <div class="fs-5 fw-semibold text-primary">{{ total_leads_this_month }}</div>
+          <div class="small text-muted">This Month</div>
+        </div>
+      </div>
     </div>
   </div>
   <div class="col-md-3">
     <div class="card p-3 border-start border-success border-3">
       <div class="text-muted small">Converted</div>
-      <div class="fs-3 fw-bold">{{ converted_total }}</div>
-      <div class="small text-success mt-1"><strong>{{ conversion_rate }}%</strong> rate</div>
+      <div class="d-flex justify-content-between align-items-end mt-1">
+        <div>
+          <div class="fs-3 fw-bold">{{ converted_total }}</div>
+          <div class="small text-muted">Overall</div>
+        </div>
+        <div class="text-end">
+          <div class="fs-5 fw-semibold text-success">{{ converted_this_month }}</div>
+          <div class="small text-muted">This Month</div>
+        </div>
+      </div>
     </div>
   </div>
   <div class="col-md-3">
     <div class="card p-3 border-start border-warning border-3">
       <div class="text-muted small">Lost</div>
-      <div class="fs-3 fw-bold">{{ lost_total }}</div>
-      <div class="small text-muted mt-1">Need review</div>
+      <div class="d-flex justify-content-between align-items-end mt-1">
+        <div>
+          <div class="fs-3 fw-bold">{{ lost_total }}</div>
+          <div class="small text-muted">Overall</div>
+        </div>
+        <div class="text-end">
+          <div class="fs-5 fw-semibold text-warning">{{ lost_this_month }}</div>
+          <div class="small text-muted">This Month</div>
+        </div>
+      </div>
     </div>
   </div>
   <div class="col-md-3">
@@ -48,18 +72,18 @@
       <div class="card-body">
         <div class="d-flex justify-content-around text-center">
           <div>
+            <div class="text-muted small">Active This Month</div>
+            <div class="fs-4 fw-bold text-primary">{{ active_this_month }}</div>
+          </div>
+          <div class="border-start"></div>
+          <div>
             <div class="text-muted small">Converted This Month</div>
             <div class="fs-4 fw-bold text-success">{{ converted_this_month }}</div>
           </div>
           <div class="border-start"></div>
           <div>
-            <div class="text-muted small">Active Leads</div>
-            <div class="fs-4 fw-bold text-info">{{ total_active }}</div>
-          </div>
-          <div class="border-start"></div>
-          <div>
-            <div class="text-muted small">Overall Rate</div>
-            <div class="fs-4 fw-bold text-primary">{{ conversion_rate }}%</div>
+            <div class="text-muted small">Lost This Month</div>
+            <div class="fs-4 fw-bold text-warning">{{ lost_this_month }}</div>
           </div>
         </div>
       </div>

@@ -96,7 +96,7 @@
           <thead><tr><th>Source</th><th class="text-end">Count</th><th class="text-end">Converted</th><th class="text-end">%</th><th class="text-end">Conv. Rate</th></tr></thead>
           <tbody>
             {% for s, total, converted, conv_rate in source_rows %}
-              {% set pct = (total / total_leads * 100)|round(1) %}
+              {% set pct = ((total / total_leads * 100) if total_leads > 0 else 0)|round(1) %}
               <tr>
                 <td><a href="{{ url_for('leads_list', source=s, user_id=selected_user_id if selected_user_id else '', date_from=date_from if date_from else '', date_to=date_to if date_to else '') }}" class="text-decoration-none">{{ s or 'Unknown' }}</a></td>
                 <td class="text-end">{{ total }}</td>
@@ -123,7 +123,7 @@
           <thead><tr><th>Course</th><th class="text-end">Count</th><th class="text-end">Converted</th><th class="text-end">%</th><th class="text-end">Conv. Rate</th></tr></thead>
           <tbody>
             {% for course, total, converted, conv_rate in course_rows %}
-              {% set pct = (total / total_leads * 100)|round(1) %}
+              {% set pct = ((total / total_leads * 100) if total_leads > 0 else 0)|round(1) %}
               <tr>
                 <td>{{ course or 'Unknown' }}</td>
                 <td class="text-end">{{ total }}</td>

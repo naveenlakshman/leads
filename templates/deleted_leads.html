@@ -1,0 +1,34 @@
+{% extends 'base.html' %}
+{% block title %}Deactivated Leads - GlobalIT CRM{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h2 class="mb-0">Deactivated Leads</h2>
+    <div class="text-muted small">Admin-only list of soft deleted leads</div>
+  </div>
+  <a class="btn btn-sm btn-outline-primary" href="{{ url_for('leads_list') }}">Back to Leads</a>
+</div>
+
+{% if leads %}
+  <div class="table-responsive">
+    <table class="table table-sm">
+      <thead><tr><th>Sl No</th><th>Name</th><th>Phone</th><th>Stage</th><th>Score</th><th>Owner</th><th></th></tr></thead>
+      <tbody>
+        {% for l in leads %}
+        <tr>
+          <td>{{ loop.index }}</td>
+          <td>{{ l.name }}</td>
+          <td>{{ l.phone }}</td>
+          <td>{{ l.stage }}</td>
+          <td><span class="badge {% if l.lead_score>=60 %}bg-danger{% else %}bg-secondary{% endif %}">{{ l.lead_score }}</span></td>
+          <td><small class="text-muted">{% if l.assigned_to %}{{ l.assigned_to.full_name or l.assigned_to.username }}{% else %}Unassigned{% endif %}</small></td>
+          <td><a class="btn btn-sm btn-outline-primary" href="{{ url_for('lead_detail', lead_id=l.id) }}">Open</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% else %}
+  <div class="text-muted">No deactivated leads found.</div>
+{% endif %}
+{% endblock %}
