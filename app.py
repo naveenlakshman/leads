@@ -108,6 +108,7 @@ def create_app():
 
         new_leads_today = Lead.query.filter(
             db.func.date(Lead.created_at) == str(today),
+            Lead.is_deleted == False,
             query_filter
         ).count()
 
@@ -115,12 +116,14 @@ def create_app():
             Lead.status == "active",
             Lead.next_followup_date.isnot(None),
             Lead.next_followup_date <= today,
+            Lead.is_deleted == False,
             query_filter
         ).order_by(Lead.next_followup_date.asc()).all()
 
         hot_leads = Lead.query.filter(
             Lead.status == "active",
             Lead.lead_score >= 60,
+            Lead.is_deleted == False,
             query_filter
         ).order_by(Lead.lead_score.desc()).limit(10).all()
 
@@ -128,15 +131,16 @@ def create_app():
             Lead.status == "converted",
             db.extract("month", Lead.updated_at) == today.month,
             db.extract("year", Lead.updated_at) == today.year,
+            Lead.is_deleted == False,
             query_filter
         ).count()
 
-        total_active = Lead.query.filter(Lead.status == "active", query_filter).count()
+        total_active = Lead.query.filter(Lead.status == "active", Lead.is_deleted == False, query_filter).count()
         
         # Enhanced metrics
-        total_leads = Lead.query.filter(query_filter).count()
-        converted_total = Lead.query.filter(Lead.status == "converted", query_filter).count()
-        lost_total = Lead.query.filter(Lead.status == "lost", query_filter).count()
+        total_leads = Lead.query.filter(Lead.is_deleted == False, query_filter).count()
+        converted_total = Lead.query.filter(Lead.status == "converted", Lead.is_deleted == False, query_filter).count()
+        lost_total = Lead.query.filter(Lead.status == "lost", Lead.is_deleted == False, query_filter).count()
         
         # Conversion rate
         conversion_rate = round((converted_total / total_leads * 100), 1) if total_leads > 0 else 0
@@ -145,11 +149,12 @@ def create_app():
         stage_breakdown = db.session.query(
             Lead.stage,
             db.func.count(Lead.id)
-        ).filter(query_filter, Lead.status == "active").group_by(Lead.stage).all()
+        ).filter(Lead.is_deleted == False, query_filter, Lead.status == "active").group_by(Lead.stage).all()
         
         # High-risk leads (old last contact)
         high_risk_leads = Lead.query.filter(
             Lead.status == "active",
+            Lead.is_deleted == False,
             query_filter
         ).order_by(Lead.last_contact_date.desc()).limit(5).all()
         
@@ -160,8 +165,8 @@ def create_app():
             counselors = User.query.filter(User.role == "counselor", User.is_active == True).all()
             
             for counselor in counselors:
-                c_total = Lead.query.filter(Lead.assigned_to_id == counselor.id).count()
-                c_converted = Lead.query.filter(Lead.assigned_to_id == counselor.id, Lead.status == "converted").count()
+                c_total = Lead.query.filter(Lead.assigned_to_id == counselor.id, Lead.is_deleted == False).count()
+                c_converted = Lead.query.filter(Lead.assigned_to_id == counselor.id, Lead.status == "converted", Lead.is_deleted == False).count()
                 c_rate = round((c_converted / c_total * 100), 1) if c_total > 0 else 0
                 
                 if c_total > 0:
@@ -205,7 +210,7 @@ def create_app():
         source = request.args.get("source", "").strip()
         user_id = request.args.get("user_id", "").strip()
 
-        query = Lead.query
+        query = Lead.query.filter(Lead.is_deleted == False)
 
         # Counselors see only their leads; admins see all by default or filter by user_id
         if current_user.role == "counselor":
@@ -413,9 +418,18 @@ def create_app():
     @login_required
     def lead_delete(lead_id):
         lead = Lead.query.get_or_404(lead_id)
-        db.session.delete(lead)
+        lead.is_deleted = True
         db.session.commit()
-        flash("Lead deleted.", "warning")
+        
+        # Log activity
+        log_activity(
+            user_id=current_user.id,
+            lead_id=lead.id,
+            action_type="lead_deleted",
+            description=f"Lead deactivated: {lead.name}"
+        )
+        
+        flash("Lead deactivated. (Data is preserved and can be viewed by admins)", "warning")
         return redirect(url_for("leads_list"))
 
     @app.route("/leads/<int:lead_id>/convert", methods=["POST"])
@@ -582,7 +596,7 @@ def create_app():
         user_id = request.args.get("user_id", "").strip()
         
         # Counselors see only their leads; admins see all by default or filter by user_id
-        base_query = Lead.query
+        base_query = Lead.query.filter(Lead.is_deleted == False)
         if current_user.role == "counselor":
             base_query = base_query.filter(Lead.assigned_to_id == current_user.id)
             all_users = [current_user]  # Counselors only see themselves
@@ -680,9 +694,9 @@ def create_app():
         
         # Combine all filters with AND
         if base_filter:
-            query_filter = db.and_(*base_filter)
+            query_filter = db.and_(*base_filter, Lead.is_deleted == False)
         else:
-            query_filter = True
+            query_filter = Lead.is_deleted == False
 
         total_leads = Lead.query.filter(query_filter).count()
         active = Lead.query.filter(Lead.status == "active", query_filter).count()
@@ -729,7 +743,7 @@ def create_app():
             # Show summary of all users with leads
             users = all_users
             for user in users:
-                user_base_filter = [Lead.assigned_to_id == user.id]
+                user_base_filter = [Lead.assigned_to_id == user.id, Lead.is_deleted == False]
                 
                 # Apply date filters
                 if date_from:

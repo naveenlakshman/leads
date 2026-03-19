@@ -91,6 +91,9 @@ class Lead(db.Model):
 
     lost_reason = db.Column(db.String(120), nullable=True)
 
+    # Soft delete flag
+    is_deleted = db.Column(db.Boolean, default=False, nullable=False)
+
     # Ownership (who is handling)
     assigned_to_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
     assigned_to = db.relationship("User", backref=db.backref("assigned_leads", lazy=True))
