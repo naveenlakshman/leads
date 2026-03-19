@@ -253,6 +253,11 @@ def create_app():
             all_users = User.query.order_by(User.full_name).all()
 
         metrics = {
+            "total_overall": base_query.count(),
+            "total_this_month": base_query.filter(
+                db.extract("month", Lead.created_at) == today.month,
+                db.extract("year", Lead.created_at) == today.year
+            ).count(),
             "active_overall": base_query.filter(Lead.status == "active").count(),
             "active_this_month": base_query.filter(
                 Lead.status == "active",
