@@ -1,6 +1,6 @@
 # app.py
 from datetime import datetime, date
-from flask import Flask, render_template, request, redirect, url_for, flash, abort
+from flask import Flask, render_template, request, redirect, url_for, flash, abort, send_file
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from flask_migrate import Migrate
 from config import Config
@@ -8,6 +8,9 @@ from models import db, User, Lead, FollowUp, Activity
 from utils.auth import admin_required
 from utils.helpers import parse_date, utc_to_ist, log_activity
 from utils.lead_score import compute_lead_score
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from io import BytesIO
 
 def create_app():
     app = Flask(__name__)
@@ -715,7 +718,7 @@ def create_app():
     # -----------------------
     # REPORTS (admin only)
     # -----------------------
-    @app.route("/reports")
+    @app.route("/reports", strict_slashes=False)
     @login_required
     @admin_required
     def reports():
@@ -866,6 +869,224 @@ def create_app():
             date_to=date_to,
             user_stats=user_stats
         )
+
+    @app.route("/reports/export-excel", strict_slashes=False)
+    @login_required
+    @admin_required
+    def reports_export_excel():
+        """Export all database tables to Excel workbook sheets."""
+        
+        # Create workbook
+        wb = Workbook()
+        wb.remove(wb.active)  # Remove default sheet
+
+        # Define styles for headers
+        header_fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
+        header_font = Font(bold=True, color="FFFFFF", size=10)
+        border = Border(
+            left=Side(style='thin'),
+            right=Side(style='thin'),
+            top=Side(style='thin'),
+            bottom=Side(style='thin')
+        )
+
+        def apply_header_style(ws, headers_list):
+            """Apply header styling to first row"""
+            for col_num, header in enumerate(headers_list, 1):
+                cell = ws.cell(row=1, column=col_num)
+                cell.value = header
+                cell.fill = header_fill
+                cell.font = header_font
+                cell.border = border
+                cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+
+        def apply_cell_style(ws, row_num, col_count):
+            """Apply borders to cells"""
+            for col in range(1, col_count + 1):
+                cell = ws.cell(row=row_num, column=col)
+                cell.border = border
+
+        # ============ LEADS SHEET ============
+        ws_leads = wb.create_sheet("Leads")
+        
+        leads_headers = [
+            "ID", "Name", "Phone", "WhatsApp", "Gender", "Age",
+            "Education Status", "Stream", "Institute", "Career Goal", 
+            "Interested Courses", "Lead Source", "Decision Maker",
+            "Start Timeframe", "Lead Score", "Stage", "Status",
+            "Last Contact", "Next Followup", "Followup Count",
+            "Notes", "Lost Reason", "Assigned To", "Created At", "Updated At"
+        ]
+        apply_header_style(ws_leads, leads_headers)
+        
+        all_leads = Lead.query.all()
+        row = 2
+        for lead in all_leads:
+            ws_leads.cell(row=row, column=1).value = lead.id
+            ws_leads.cell(row=row, column=2).value = lead.name
+            ws_leads.cell(row=row, column=3).value = lead.phone
+            ws_leads.cell(row=row, column=4).value = lead.whatsapp
+            ws_leads.cell(row=row, column=5).value = lead.gender
+            ws_leads.cell(row=row, column=6).value = lead.age
+            ws_leads.cell(row=row, column=7).value = lead.education_status
+            ws_leads.cell(row=row, column=8).value = lead.stream
+            ws_leads.cell(row=row, column=9).value = lead.institute_name
+            ws_leads.cell(row=row, column=10).value = lead.career_goal
+            ws_leads.cell(row=row, column=11).value = lead.interested_courses
+            ws_leads.cell(row=row, column=12).value = lead.lead_source
+            ws_leads.cell(row=row, column=13).value = lead.decision_maker
+            ws_leads.cell(row=row, column=14).value = lead.start_timeframe
+            ws_leads.cell(row=row, column=15).value = lead.lead_score
+            ws_leads.cell(row=row, column=16).value = lead.stage
+            ws_leads.cell(row=row, column=17).value = lead.status
+            ws_leads.cell(row=row, column=18).value = lead.last_contact_date.strftime('%d-%b-%Y') if lead.last_contact_date else ""
+            ws_leads.cell(row=row, column=19).value = lead.next_followup_date.strftime('%d-%b-%Y') if lead.next_followup_date else ""
+            ws_leads.cell(row=row, column=20).value = lead.followup_count
+            ws_leads.cell(row=row, column=21).value = lead.notes
+            ws_leads.cell(row=row, column=22).value = lead.lost_reason
+            assigned_user = User.query.get(lead.assigned_to_id) if lead.assigned_to_id else None
+            ws_leads.cell(row=row, column=23).value = assigned_user.full_name if assigned_user else ""
+            ws_leads.cell(row=row, column=24).value = lead.created_at.strftime('%d-%b-%Y %H:%M') if lead.created_at else ""
+            ws_leads.cell(row=row, column=25).value = lead.updated_at.strftime('%d-%b-%Y %H:%M') if lead.updated_at else ""
+            
+            apply_cell_style(ws_leads, row, len(leads_headers))
+            row += 1
+        
+        # Set column widths
+        ws_leads.column_dimensions['A'].width = 8
+        ws_leads.column_dimensions['B'].width = 20
+        ws_leads.column_dimensions['C'].width = 15
+        ws_leads.column_dimensions['D'].width = 15
+        ws_leads.column_dimensions['E'].width = 12
+        ws_leads.column_dimensions['F'].width = 8
+        ws_leads.column_dimensions['G'].width = 15
+        ws_leads.column_dimensions['H'].width = 12
+        ws_leads.column_dimensions['I'].width = 15
+        ws_leads.column_dimensions['J'].width = 12
+        ws_leads.column_dimensions['K'].width = 15
+        ws_leads.column_dimensions['L'].width = 15
+        ws_leads.column_dimensions['M'].width = 12
+        ws_leads.column_dimensions['N'].width = 15
+        ws_leads.column_dimensions['O'].width = 10
+        ws_leads.column_dimensions['P'].width = 15
+        ws_leads.column_dimensions['Q'].width = 12
+        ws_leads.column_dimensions['R'].width = 12
+        ws_leads.column_dimensions['S'].width = 12
+        ws_leads.column_dimensions['T'].width = 12
+        ws_leads.column_dimensions['U'].width = 20
+        ws_leads.column_dimensions['V'].width = 15
+        ws_leads.column_dimensions['W'].width = 20
+        ws_leads.column_dimensions['X'].width = 18
+        ws_leads.column_dimensions['Y'].width = 18
+
+        # ============ USERS SHEET ============
+        ws_users = wb.create_sheet("Users")
+        
+        users_headers = ["ID", "Username", "Full Name", "Role", "Is Active", "Created At"]
+        apply_header_style(ws_users, users_headers)
+        
+        all_users = User.query.all()
+        row = 2
+        for user in all_users:
+            ws_users.cell(row=row, column=1).value = user.id
+            ws_users.cell(row=row, column=2).value = user.username
+            ws_users.cell(row=row, column=3).value = user.full_name
+            ws_users.cell(row=row, column=4).value = user.role
+            ws_users.cell(row=row, column=5).value = "Yes" if user.is_active else "No"
+            ws_users.cell(row=row, column=6).value = user.created_at.strftime('%d-%b-%Y %H:%M') if user.created_at else ""
+            
+            apply_cell_style(ws_users, row, len(users_headers))
+            row += 1
+        
+        # Set column widths
+        ws_users.column_dimensions['A'].width = 8
+        ws_users.column_dimensions['B'].width = 15
+        ws_users.column_dimensions['C'].width = 20
+        ws_users.column_dimensions['D'].width = 12
+        ws_users.column_dimensions['E'].width = 12
+        ws_users.column_dimensions['F'].width = 18
+
+        # ============ FOLLOWUPS SHEET ============
+        ws_followups = wb.create_sheet("FollowUps")
+        
+        followups_headers = ["ID", "Lead ID", "Lead Name", "User", "Method", "Outcome", "Note", "Next Followup Date", "Created At"]
+        apply_header_style(ws_followups, followups_headers)
+        
+        all_followups = FollowUp.query.all()
+        row = 2
+        for fu in all_followups:
+            ws_followups.cell(row=row, column=1).value = fu.id
+            ws_followups.cell(row=row, column=2).value = fu.lead_id
+            ws_followups.cell(row=row, column=3).value = fu.lead.name if fu.lead else ""
+            ws_followups.cell(row=row, column=4).value = fu.user.full_name if fu.user else ""
+            ws_followups.cell(row=row, column=5).value = fu.method
+            ws_followups.cell(row=row, column=6).value = fu.outcome
+            ws_followups.cell(row=row, column=7).value = fu.note
+            ws_followups.cell(row=row, column=8).value = fu.next_followup_date.strftime('%d-%b-%Y') if fu.next_followup_date else ""
+            ws_followups.cell(row=row, column=9).value = fu.created_at.strftime('%d-%b-%Y %H:%M') if fu.created_at else ""
+            
+            apply_cell_style(ws_followups, row, len(followups_headers))
+            row += 1
+        
+        # Set column widths
+        ws_followups.column_dimensions['A'].width = 8
+        ws_followups.column_dimensions['B'].width = 10
+        ws_followups.column_dimensions['C'].width = 20
+        ws_followups.column_dimensions['D'].width = 15
+        ws_followups.column_dimensions['E'].width = 12
+        ws_followups.column_dimensions['F'].width = 15
+        ws_followups.column_dimensions['G'].width = 25
+        ws_followups.column_dimensions['H'].width = 15
+        ws_followups.column_dimensions['I'].width = 18
+
+        # ============ ACTIVITIES SHEET ============
+        ws_activities = wb.create_sheet("Activities")
+        
+        activities_headers = ["ID", "User", "Lead ID", "Lead Name", "Action Type", "Description", "Field Changed", "Old Value", "New Value", "Created At"]
+        apply_header_style(ws_activities, activities_headers)
+        
+        all_activities = Activity.query.all()
+        row = 2
+        for activity in all_activities:
+            ws_activities.cell(row=row, column=1).value = activity.id
+            ws_activities.cell(row=row, column=2).value = activity.user.full_name if activity.user else ""
+            ws_activities.cell(row=row, column=3).value = activity.lead_id
+            ws_activities.cell(row=row, column=4).value = activity.lead.name if activity.lead else ""
+            ws_activities.cell(row=row, column=5).value = activity.action_type
+            ws_activities.cell(row=row, column=6).value = activity.description
+            ws_activities.cell(row=row, column=7).value = activity.field_changed
+            ws_activities.cell(row=row, column=8).value = activity.old_value
+            ws_activities.cell(row=row, column=9).value = activity.new_value
+            ws_activities.cell(row=row, column=10).value = activity.created_at.strftime('%d-%b-%Y %H:%M') if activity.created_at else ""
+            
+            apply_cell_style(ws_activities, row, len(activities_headers))
+            row += 1
+        
+        # Set column widths
+        ws_activities.column_dimensions['A'].width = 8
+        ws_activities.column_dimensions['B'].width = 15
+        ws_activities.column_dimensions['C'].width = 10
+        ws_activities.column_dimensions['D'].width = 20
+        ws_activities.column_dimensions['E'].width = 18
+        ws_activities.column_dimensions['F'].width = 25
+        ws_activities.column_dimensions['G'].width = 15
+        ws_activities.column_dimensions['H'].width = 15
+        ws_activities.column_dimensions['I'].width = 15
+        ws_activities.column_dimensions['J'].width = 18
+
+        # Save to BytesIO buffer
+        output = BytesIO()
+        wb.save(output)
+        output.seek(0)
+
+        # Return file
+        return send_file(
+            output,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=f"leads_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        )
+
 
     # -----------------------
     # ACTIVITY LOG (audit trail)

@@ -4,6 +4,9 @@
 
 <div class="d-flex justify-content-between align-items-center mb-3">
   <h5 class="mb-0">Reports</h5>
+  <a href="{{ url_for('reports_export_excel', user_id=selected_user_id if selected_user_id else '', date_from=date_from if date_from else '', date_to=date_to if date_to else '') }}" class="btn btn-success btn-sm" title="Download all tables as Excel">
+    <i class="bi bi-download"></i> Download Excel
+  </a>
 </div>
 
 <form method="get" class="row g-2 mb-3" id="reportFilterForm">
